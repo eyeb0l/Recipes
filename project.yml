@@ -16,7 +16,7 @@ settings:
     DEVELOPMENT_TEAM: 359794K46A
     APP_GROUP_IDENTIFIER: group.com.irisgiertuga.RecipeTimeline
     ICLOUD_CONTAINER_IDENTIFIER: iCloud.com.irisgiertuga.RecipeTimeline
-    IMPORT_API_BASE_URL: http://127.0.0.1:8787
+    IMPORT_API_BASE_URL: https://recipe-timeline-import-api.iris-account.workers.dev
 
 targets:
   RecipeCore:

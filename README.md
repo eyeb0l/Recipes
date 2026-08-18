@@ -38,7 +38,7 @@ xcodebuild -project RecipeTimeline.xcodeproj \
 
 Device and TestFlight builds use Apple Developer team `359794K46A`, the app identifier `com.irisgiertuga.RecipeTimeline`, and matching App Group and iCloud identifiers declared in `project.yml`. Regenerate the project after changing these values. `Configs/Signing.xcconfig.example` records the coordinated identifier set; it is not loaded automatically, so it cannot silently override generated target identifiers.
 
-The default import endpoint is `http://127.0.0.1:8787`. Change `IMPORT_API_BASE_URL` in `project.yml` to the deployed HTTPS Worker URL before an archive.
+The app uses the deployed import endpoint at `https://recipe-timeline-import-api.iris-account.workers.dev`. Change `IMPORT_API_BASE_URL` in `project.yml` if the Worker hostname changes, then regenerate the Xcode project before archiving.
 
 ## Run backend checks
 
