@@ -2,7 +2,7 @@ import Foundation
 import Security
 
 enum KeychainStore {
-    private static let service = "com.example.RecipeTimeline.auth"
+    private static let service = "com.irisgiertuga.RecipeTimeline.auth"
 
     static func save(_ data: Data, account: String) throws {
         let query: [String: Any] = [
@@ -46,4 +46,3 @@ enum KeychainStore {
 enum KeychainError: Error {
     case status(OSStatus)
 }
-

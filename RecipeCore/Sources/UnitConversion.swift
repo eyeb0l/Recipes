@@ -185,11 +185,22 @@ public extension CulinaryQuantity {
         case .exact:
             return formatted(value ?? 0)
         case .range:
-            return "\(formatted(lower ?? 0))–\(formatted(upper ?? lower ?? 0))"
+            let lowerValue = lower ?? 0
+            let upperValue = upper ?? lowerValue
+            let amount = "\(formattedAmount(lowerValue))–\(formattedAmount(upperValue))"
+            let symbol = CulinaryUnits.symbol(for: unit, plural: upperValue > 1)
+            return symbol.isEmpty ? amount : "\(amount) \(symbol)"
         }
     }
 
     private func formatted(_ value: Decimal) -> String {
+        let amount = formattedAmount(value)
+        let number = NSDecimalNumber(decimal: value).doubleValue
+        let symbol = CulinaryUnits.symbol(for: unit, plural: number > 1.000_1)
+        return symbol.isEmpty ? amount : "\(amount) \(symbol)"
+    }
+
+    private func formattedAmount(_ value: Decimal) -> String {
         let number = NSDecimalNumber(decimal: value).doubleValue
         let whole = floor(number + 0.000_001)
         let fraction = number - whole
@@ -210,8 +221,7 @@ public extension CulinaryQuantity {
         } else {
             amount = number.formatted(.number.precision(.fractionLength(0...2)))
         }
-        let symbol = CulinaryUnits.symbol(for: unit, plural: number > 1.000_1)
-        return symbol.isEmpty ? amount : "\(amount) \(symbol)"
+        return amount
     }
 }
 
@@ -239,4 +249,3 @@ public extension CookingTemperature {
         return "\(rounded)\(unit == .celsius ? "°C" : "°F")"
     }
 }
-

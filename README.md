@@ -36,7 +36,7 @@ xcodebuild -project RecipeTimeline.xcodeproj \
   CODE_SIGNING_ALLOWED=NO build
 ```
 
-Before device or TestFlight builds, replace the `com.example` bundle, App Group, and iCloud identifiers in `project.yml`, set your Apple development team, regenerate the project, and create matching capabilities in the Apple Developer portal. `Configs/Signing.xcconfig.example` records the values that must be supplied; it is not loaded automatically so a local signing file cannot silently override generated target identifiers.
+Device and TestFlight builds use Apple Developer team `359794K46A`, the app identifier `com.irisgiertuga.RecipeTimeline`, and matching App Group and iCloud identifiers declared in `project.yml`. Regenerate the project after changing these values. `Configs/Signing.xcconfig.example` records the coordinated identifier set; it is not loaded automatically, so it cannot silently override generated target identifiers.
 
 The default import endpoint is `http://127.0.0.1:8787`. Change `IMPORT_API_BASE_URL` in `project.yml` to the deployed HTTPS Worker URL before an archive.
 

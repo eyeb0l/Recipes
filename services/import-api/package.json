@@ -8,8 +8,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:live:grok": "node --env-file=.dev.vars --import tsx scripts/live-contract.ts grok",
-    "test:live:openai": "node --env-file=.dev.vars --import tsx scripts/live-contract.ts openai"
+    "test:live:grok": "env -u XAI_API_KEY node --env-file=.dev.vars --import tsx scripts/live-contract.ts grok",
+    "test:live:openai": "env -u OPENAI_API_KEY node --env-file=.dev.vars --import tsx scripts/live-contract.ts openai"
   },
   "dependencies": {
     "hono": "^4.9.0",

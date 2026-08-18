@@ -517,8 +517,30 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					04F2A557D1DBA2800DF4930D = {
+						DevelopmentTeam = 359794K46A;
+						ProvisioningStyle = Automatic;
+					};
+					3B7CFB0B4550115CF98027B5 = {
+						DevelopmentTeam = 359794K46A;
+						ProvisioningStyle = Automatic;
+					};
+					5280C617EF3E8824ACB235B6 = {
+						DevelopmentTeam = 359794K46A;
+						ProvisioningStyle = Automatic;
+					};
+					6F870B8B5AD2542A99CF1D3B = {
+						DevelopmentTeam = 359794K46A;
+						ProvisioningStyle = Automatic;
+					};
 					D761BA72C9F489564C06B380 = {
+						DevelopmentTeam = 359794K46A;
+						ProvisioningStyle = Automatic;
 						TestTargetID = 04F2A557D1DBA2800DF4930D;
+					};
+					E61202BE47D4AB4040A9E970 = {
+						DevelopmentTeam = 359794K46A;
+						ProvisioningStyle = Automatic;
 					};
 				};
 			};
@@ -670,7 +692,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.RecipeTimeline;
+				PRODUCT_BUNDLE_IDENTIFIER = com.irisgiertuga.RecipeTimeline;
 				PRODUCT_NAME = RecipeTimeline;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -688,7 +710,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.RecipeTimeline.CookActivity;
+				PRODUCT_BUNDLE_IDENTIFIER = com.irisgiertuga.RecipeTimeline.CookActivity;
 				PRODUCT_NAME = RecipeCookActivity;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -711,7 +733,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.RecipeTimeline.RecipeCore;
+				PRODUCT_BUNDLE_IDENTIFIER = com.irisgiertuga.RecipeTimeline.RecipeCore;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -729,7 +751,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.RecipeTimeline.Tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.irisgiertuga.RecipeTimeline.Tests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RecipeTimeline.app/RecipeTimeline";
@@ -746,7 +768,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.RecipeTimeline.UITests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.irisgiertuga.RecipeTimeline.UITests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = RecipeTimeline;
@@ -763,7 +785,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.RecipeTimeline.RecipeCoreTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.irisgiertuga.RecipeTimeline.RecipeCoreTests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -780,7 +802,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.RecipeTimeline.CookActivity;
+				PRODUCT_BUNDLE_IDENTIFIER = com.irisgiertuga.RecipeTimeline.CookActivity;
 				PRODUCT_NAME = RecipeCookActivity;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -799,7 +821,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.RecipeTimeline;
+				PRODUCT_BUNDLE_IDENTIFIER = com.irisgiertuga.RecipeTimeline;
 				PRODUCT_NAME = RecipeTimeline;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -810,7 +832,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				APP_GROUP_IDENTIFIER = group.com.example.RecipeTimeline;
+				APP_GROUP_IDENTIFIER = group.com.irisgiertuga.RecipeTimeline;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
@@ -841,8 +863,10 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 359794K46A;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -860,7 +884,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				ICLOUD_CONTAINER_IDENTIFIER = iCloud.com.example.RecipeTimeline;
+				ICLOUD_CONTAINER_IDENTIFIER = iCloud.com.irisgiertuga.RecipeTimeline;
 				IMPORT_API_BASE_URL = "http://127.0.0.1:8787";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
@@ -885,7 +909,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.RecipeTimeline.RecipeCoreTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.irisgiertuga.RecipeTimeline.RecipeCoreTests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -906,7 +930,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.RecipeTimeline.RecipeCore;
+				PRODUCT_BUNDLE_IDENTIFIER = com.irisgiertuga.RecipeTimeline.RecipeCore;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -918,7 +942,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				APP_GROUP_IDENTIFIER = group.com.example.RecipeTimeline;
+				APP_GROUP_IDENTIFIER = group.com.irisgiertuga.RecipeTimeline;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
@@ -949,8 +973,10 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 359794K46A;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -962,7 +988,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				ICLOUD_CONTAINER_IDENTIFIER = iCloud.com.example.RecipeTimeline;
+				ICLOUD_CONTAINER_IDENTIFIER = iCloud.com.irisgiertuga.RecipeTimeline;
 				IMPORT_API_BASE_URL = "http://127.0.0.1:8787";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
@@ -986,7 +1012,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.RecipeTimeline.Tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.irisgiertuga.RecipeTimeline.Tests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RecipeTimeline.app/RecipeTimeline";
@@ -1003,7 +1029,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.RecipeTimeline.UITests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.irisgiertuga.RecipeTimeline.UITests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = RecipeTimeline;

@@ -12,8 +12,10 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     ENABLE_USER_SCRIPT_SANDBOXING: true
     ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: true
-    APP_GROUP_IDENTIFIER: group.com.example.RecipeTimeline
-    ICLOUD_CONTAINER_IDENTIFIER: iCloud.com.example.RecipeTimeline
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: 359794K46A
+    APP_GROUP_IDENTIFIER: group.com.irisgiertuga.RecipeTimeline
+    ICLOUD_CONTAINER_IDENTIFIER: iCloud.com.irisgiertuga.RecipeTimeline
     IMPORT_API_BASE_URL: http://127.0.0.1:8787
 
 targets:
@@ -24,7 +26,7 @@ targets:
       - path: RecipeCore/Sources
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.RecipeTimeline.RecipeCore
+        PRODUCT_BUNDLE_IDENTIFIER: com.irisgiertuga.RecipeTimeline.RecipeCore
         DEFINES_MODULE: true
         SKIP_INSTALL: true
         GENERATE_INFOPLIST_FILE: true
@@ -55,11 +57,13 @@ targets:
         NSCameraUsageDescription: Photograph cookbook pages to turn them into editable recipe timelines.
         NSPhotoLibraryUsageDescription: Choose cookbook photos to turn them into editable recipe timelines.
         NSSupportsLiveActivities: true
+        UIBackgroundModes:
+          - remote-notification
         AppGroupIdentifier: $(APP_GROUP_IDENTIFIER)
         ICloudContainerIdentifier: $(ICLOUD_CONTAINER_IDENTIFIER)
         ImportAPIBaseURL: $(IMPORT_API_BASE_URL)
         CFBundleURLTypes:
-          - CFBundleURLName: com.example.RecipeTimeline
+          - CFBundleURLName: com.irisgiertuga.RecipeTimeline
             CFBundleURLSchemes:
               - recipetimeline
     entitlements:
@@ -80,7 +84,7 @@ targets:
         embed: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.RecipeTimeline
+        PRODUCT_BUNDLE_IDENTIFIER: com.irisgiertuga.RecipeTimeline
         PRODUCT_NAME: RecipeTimeline
         TARGETED_DEVICE_FAMILY: "1,2"
 
@@ -107,7 +111,7 @@ targets:
       - target: RecipeCore
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.RecipeTimeline.CookActivity
+        PRODUCT_BUNDLE_IDENTIFIER: com.irisgiertuga.RecipeTimeline.CookActivity
         PRODUCT_NAME: RecipeCookActivity
         SKIP_INSTALL: true
         APPLICATION_EXTENSION_API_ONLY: true
@@ -121,7 +125,7 @@ targets:
       - target: RecipeCore
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.RecipeTimeline.RecipeCoreTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.irisgiertuga.RecipeTimeline.RecipeCoreTests
         GENERATE_INFOPLIST_FILE: true
 
   RecipeTimelineTests:
@@ -133,7 +137,7 @@ targets:
       - target: RecipeTimeline
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.RecipeTimeline.Tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.irisgiertuga.RecipeTimeline.Tests
         GENERATE_INFOPLIST_FILE: true
 
   RecipeTimelineUITests:
@@ -145,7 +149,7 @@ targets:
       - target: RecipeTimeline
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.RecipeTimeline.UITests
+        PRODUCT_BUNDLE_IDENTIFIER: com.irisgiertuga.RecipeTimeline.UITests
         TEST_TARGET_NAME: RecipeTimeline
         GENERATE_INFOPLIST_FILE: true
 

@@ -36,7 +36,7 @@ export function testEnv(overrides: Partial<Env> = {}): Env {
   return {
     SESSIONS: new MemoryKV() as unknown as KVNamespace,
     IMPORT_RATE_LIMITER: { limit: async () => ({ success: true }) },
-    APPLE_CLIENT_ID: "com.example.RecipeTimeline",
+    APPLE_CLIENT_ID: "com.irisgiertuga.RecipeTimeline",
     SESSION_SIGNING_KEY: "test-only-session-signing-key-at-least-32-bytes",
     RECIPE_PROVIDER: "grok",
     GROK_MODEL: "grok-4.6",

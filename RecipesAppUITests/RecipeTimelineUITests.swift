@@ -14,7 +14,7 @@ final class RecipeTimelineUITests: XCTestCase {
         let start = app.buttons["start-cooking"]
         XCTAssertTrue(start.waitForExistence(timeout: 3))
         start.tap()
-        let cookModeAppeared = app.staticTexts["Cook mode"].waitForExistence(timeout: 5)
+        let cookModeAppeared = app.staticTexts["cook-mode-title"].waitForExistence(timeout: 5)
         XCTAssertTrue(cookModeAppeared)
         let completeExists = app.buttons["complete-stage"].exists
         XCTAssertTrue(completeExists)
@@ -32,7 +32,7 @@ final class RecipeTimelineUITests: XCTestCase {
         app.launch()
         openSampleRecipe(in: app)
         app.buttons["start-cooking"].tap()
-        XCTAssertTrue(app.staticTexts["Cook mode"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["cook-mode-title"].waitForExistence(timeout: 5))
         attachScreenshot(named: "cook-mode-dark")
     }
 

@@ -14,13 +14,16 @@ struct PersistenceController {
 
     static func make() -> PersistenceController {
         let schema = Schema([RecipeRecord.self])
-        if ProcessInfo.processInfo.arguments.contains("--ui-testing") {
+        let process = ProcessInfo.processInfo
+        let isTesting = process.arguments.contains("--ui-testing")
+            || process.environment["XCTestConfigurationFilePath"] != nil
+        if isTesting {
             let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
             return makeContainer(schema: schema, configuration: configuration, mode: .inMemory)
         }
 
         let identifier = Bundle.main.object(forInfoDictionaryKey: "ICloudContainerIdentifier") as? String
-            ?? "iCloud.com.example.RecipeTimeline"
+            ?? "iCloud.com.irisgiertuga.RecipeTimeline"
         let cloudConfiguration = ModelConfiguration(
             "Recipes",
             schema: schema,
@@ -54,4 +57,3 @@ struct PersistenceController {
         }
     }
 }
-

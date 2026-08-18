@@ -1,6 +1,5 @@
-// Copy this file to Signing.xcconfig and update the values for your Apple Developer account.
-DEVELOPMENT_TEAM = YOUR_TEAM_ID
-PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.RecipeTimeline
-APP_GROUP_IDENTIFIER = group.com.yourcompany.RecipeTimeline
-ICLOUD_CONTAINER_IDENTIFIER = iCloud.com.yourcompany.RecipeTimeline
-
+// Reference values for the Apple Developer account used by this project.
+DEVELOPMENT_TEAM = 359794K46A
+PRODUCT_BUNDLE_IDENTIFIER = com.irisgiertuga.RecipeTimeline
+APP_GROUP_IDENTIFIER = group.com.irisgiertuga.RecipeTimeline
+ICLOUD_CONTAINER_IDENTIFIER = iCloud.com.irisgiertuga.RecipeTimeline

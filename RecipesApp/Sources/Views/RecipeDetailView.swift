@@ -168,7 +168,9 @@ struct RecipeDetailView: View {
 
     private func startCooking(_ recipe: RecipeV1) async {
         do {
-            _ = await CookTimerNotifications.requestAuthorization()
+            if !ProcessInfo.processInfo.arguments.contains("--ui-testing") {
+                _ = await CookTimerNotifications.requestAuthorization()
+            }
             let session = try await CookSessionStore.shared.createSession(for: recipe)
             await CookActivityController.startOrUpdate(session: session)
             router.activeCookSession = .init(id: session.id)

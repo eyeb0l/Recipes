@@ -58,6 +58,7 @@ struct CookModeView: View {
                 Text("Cook mode")
                     .font(.caption.weight(.bold))
                     .textCase(.uppercase)
+                    .accessibilityIdentifier("cook-mode-title")
                     .tracking(1.3)
                     .foregroundStyle(RecipeTheme.secondaryInk)
                 Text("\(session.completedStageIDs.count) of \(session.stages.count) stages")

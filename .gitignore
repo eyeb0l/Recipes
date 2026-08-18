@@ -1,5 +1,5 @@
 .DS_Store
-DerivedData/
+DerivedData*/
 build/
 *.xcuserstate
 xcuserdata/
@@ -12,4 +12,3 @@ services/import-api/.env*
 !services/import-api/.dev.vars.example
 
 Configs/Signing.xcconfig
-
