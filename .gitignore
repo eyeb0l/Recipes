@@ -1,0 +1,15 @@
+.DS_Store
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+
+services/import-api/node_modules/
+services/import-api/.wrangler/
+services/import-api/coverage/
+services/import-api/.dev.vars*
+services/import-api/.env*
+!services/import-api/.dev.vars.example
+
+Configs/Signing.xcconfig
+

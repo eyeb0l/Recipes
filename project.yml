@@ -1,0 +1,170 @@
+name: RecipeTimeline
+options:
+  minimumXcodeGenVersion: 2.44.1
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: 6.0
+    SWIFT_STRICT_CONCURRENCY: complete
+    ENABLE_USER_SCRIPT_SANDBOXING: true
+    ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: true
+    APP_GROUP_IDENTIFIER: group.com.example.RecipeTimeline
+    ICLOUD_CONTAINER_IDENTIFIER: iCloud.com.example.RecipeTimeline
+    IMPORT_API_BASE_URL: http://127.0.0.1:8787
+
+targets:
+  RecipeCore:
+    type: framework
+    platform: iOS
+    sources:
+      - path: RecipeCore/Sources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.RecipeTimeline.RecipeCore
+        DEFINES_MODULE: true
+        SKIP_INSTALL: true
+        GENERATE_INFOPLIST_FILE: true
+
+  RecipeTimeline:
+    type: application
+    platform: iOS
+    sources:
+      - path: RecipesApp/Sources
+      - path: RecipesApp/Resources
+        buildPhase: resources
+    info:
+      path: RecipesApp/Info.plist
+      properties:
+        CFBundleDisplayName: Recipe Timeline
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSCameraUsageDescription: Photograph cookbook pages to turn them into editable recipe timelines.
+        NSPhotoLibraryUsageDescription: Choose cookbook photos to turn them into editable recipe timelines.
+        NSSupportsLiveActivities: true
+        AppGroupIdentifier: $(APP_GROUP_IDENTIFIER)
+        ICloudContainerIdentifier: $(ICLOUD_CONTAINER_IDENTIFIER)
+        ImportAPIBaseURL: $(IMPORT_API_BASE_URL)
+        CFBundleURLTypes:
+          - CFBundleURLName: com.example.RecipeTimeline
+            CFBundleURLSchemes:
+              - recipetimeline
+    entitlements:
+      path: RecipesApp/RecipeTimeline.entitlements
+      properties:
+        com.apple.developer.applesignin:
+          - Default
+        com.apple.security.application-groups:
+          - $(APP_GROUP_IDENTIFIER)
+        com.apple.developer.icloud-container-identifiers:
+          - $(ICLOUD_CONTAINER_IDENTIFIER)
+        com.apple.developer.icloud-services:
+          - CloudKit
+        com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)
+    dependencies:
+      - target: RecipeCore
+      - target: RecipeCookActivity
+        embed: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.RecipeTimeline
+        PRODUCT_NAME: RecipeTimeline
+        TARGETED_DEVICE_FAMILY: "1,2"
+
+  RecipeCookActivity:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: RecipesWidget/Sources
+    info:
+      path: RecipesWidget/Info.plist
+      properties:
+        CFBundleDisplayName: Cooking Activity
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        AppGroupIdentifier: $(APP_GROUP_IDENTIFIER)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: RecipesWidget/RecipeCookActivity.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - $(APP_GROUP_IDENTIFIER)
+    dependencies:
+      - target: RecipeCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.RecipeTimeline.CookActivity
+        PRODUCT_NAME: RecipeCookActivity
+        SKIP_INSTALL: true
+        APPLICATION_EXTENSION_API_ONLY: true
+
+  RecipeCoreTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: RecipeCore/Tests
+    dependencies:
+      - target: RecipeCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.RecipeTimeline.RecipeCoreTests
+        GENERATE_INFOPLIST_FILE: true
+
+  RecipeTimelineTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: RecipesAppTests
+    dependencies:
+      - target: RecipeTimeline
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.RecipeTimeline.Tests
+        GENERATE_INFOPLIST_FILE: true
+
+  RecipeTimelineUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: RecipesAppUITests
+    dependencies:
+      - target: RecipeTimeline
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.RecipeTimeline.UITests
+        TEST_TARGET_NAME: RecipeTimeline
+        GENERATE_INFOPLIST_FILE: true
+
+schemes:
+  RecipeTimeline:
+    build:
+      targets:
+        RecipeTimeline: all
+        RecipeCookActivity: all
+        RecipeCoreTests: [test]
+        RecipeTimelineTests: [test]
+        RecipeTimelineUITests: [test]
+    test:
+      gatherCoverageData: true
+      targets:
+        - RecipeCoreTests
+        - RecipeTimelineTests
+        - RecipeTimelineUITests
+    run:
+      config: Debug
+    archive:
+      config: Release
