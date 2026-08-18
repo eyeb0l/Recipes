@@ -2,9 +2,15 @@ import Foundation
 
 enum APIConfiguration {
     static var baseURL: URL {
-        let raw = Bundle.main.object(forInfoDictionaryKey: "ImportAPIBaseURL") as? String
-            ?? "http://127.0.0.1:8787"
-        return URL(string: raw)!
+        guard
+            let raw = Bundle.main.object(forInfoDictionaryKey: "ImportAPIBaseURL") as? String,
+            let url = URL(string: raw),
+            url.scheme == "https",
+            url.host != nil
+        else {
+            fatalError("ImportAPIBaseURL must be configured as a valid HTTPS URL.")
+        }
+        return url
     }
 }
 
