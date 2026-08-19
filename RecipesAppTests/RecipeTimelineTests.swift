@@ -31,4 +31,34 @@ final class RecipeTimelineTests: XCTestCase {
         let records = try container.mainContext.fetch(FetchDescriptor<RecipeRecord>())
         XCTAssertEqual(records.map(\.id), [SampleRecipe.espressoBrownies.id])
     }
+
+    func testTimelineGeometryKeepsSharedLineageTopEdgesAlignedAndBelowGlobalBand() throws {
+        let layout = try TimelineLayoutEngine.makeLayout(for: SampleRecipe.espressoBrownies)
+        let geometry = TimelineGridGeometry(layout: layout, metrics: .init())
+        let placements = Dictionary(uniqueKeysWithValues: layout.placements.map { ($0.stageID, $0) })
+        let preheat = geometry.cardFrame(for: try XCTUnwrap(placements["preheat"]))
+        let expectedTop = geometry.cardFrame(for: try XCTUnwrap(placements["melt"])).minY
+
+        for stageID in ["mix-wet", "add-eggs", "fold", "bake"] {
+            let frame = geometry.cardFrame(for: try XCTUnwrap(placements[stageID]))
+            XCTAssertEqual(frame.minY, expectedTop, accuracy: 0.001, "\(stageID) should share the lineage top edge")
+        }
+        XCTAssertGreaterThan(expectedTop, preheat.maxY)
+        XCTAssertEqual(geometry.contentWidth, 5 * TimelineGridMetrics().laneWidth, accuracy: 0.001)
+    }
+
+    func testTimelineGeometryPlacesDirectIngredientMarkersAtTheirRowCenters() throws {
+        let recipe = SampleRecipe.espressoBrownies
+        let layout = try TimelineLayoutEngine.makeLayout(for: recipe)
+        let geometry = TimelineGridGeometry(layout: layout, metrics: .init())
+        let placement = try XCTUnwrap(layout.placements.first { $0.stageID == "mix-wet" })
+        let rowsByIngredient = Dictionary(uniqueKeysWithValues: recipe.sortedIngredients.enumerated().map { ($0.element.id, $0.offset) })
+        let stage = try XCTUnwrap(recipe.stages.first { $0.id == "mix-wet" })
+        let directRows = stage.ingredientUses.compactMap { rowsByIngredient[$0.ingredientID] }
+
+        XCTAssertEqual(
+            geometry.inputMarkerOffsets(for: placement, directRows: directRows),
+            [132, 224, 316]
+        )
+    }
 }

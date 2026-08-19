@@ -67,7 +67,7 @@ struct CookModeView: View {
             Spacer()
             if session.runningTimerCount > 0 {
                 Label("\(session.runningTimerCount) running", systemImage: "timer")
-                    .foregroundStyle(RecipeTheme.focus)
+                    .foregroundStyle(RecipeTheme.focusText)
             }
             if let mutationError {
                 Text(mutationError)

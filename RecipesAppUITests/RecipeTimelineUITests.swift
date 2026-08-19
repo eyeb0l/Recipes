@@ -21,9 +21,21 @@ final class RecipeTimelineUITests: XCTestCase {
     }
 
     func testEditorialTimelineSnapshot() {
+        useLandscapeOrientation()
         let app = launchSampleApp()
         openSampleRecipe(in: app)
         attachScreenshot(named: "timeline")
+
+        let dragStart = app.coordinate(withNormalizedOffset: CGVector(dx: 0.88, dy: 0.58))
+        let dragEnd = app.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.58))
+        dragStart.press(forDuration: 0.05, thenDragTo: dragEnd)
+        dragStart.press(forDuration: 0.05, thenDragTo: dragEnd)
+
+        let finalStage = app.descendants(matching: .any)["timeline-stage-bake"]
+        XCTAssertTrue(finalStage.waitForExistence(timeout: 3))
+        XCTAssertTrue(finalStage.isHittable)
+        XCTAssertLessThanOrEqual(finalStage.frame.maxX, app.windows.firstMatch.frame.maxX - 8)
+        attachScreenshot(named: "timeline-tail")
     }
 
     func testDarkCookModeSnapshot() {
@@ -37,15 +49,43 @@ final class RecipeTimelineUITests: XCTestCase {
     }
 
     func testLargeTextStageCardsSnapshot() {
+        useLandscapeOrientation()
         let app = XCUIApplication()
         app.launchArguments = [
             "--ui-testing",
             "-UIPreferredContentSizeCategoryName",
-            "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge",
+            "UICTContentSizeCategoryAccessibilityXXXL",
         ]
         app.launch()
         openSampleRecipe(in: app)
+        XCTAssertTrue(app.staticTexts["115 g"].waitForExistence(timeout: 3))
         attachScreenshot(named: "stage-cards-accessibility-text")
+    }
+
+    func testEmptyLibrarySnapshot() {
+        useLandscapeOrientation()
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--ui-testing-empty-library"]
+        app.launch()
+
+        let detailEmptyState = app.staticTexts["Choose a recipe"]
+        let compactEmptyState = app.staticTexts["Your cookbook is empty"]
+        let emptyStateAppeared = detailEmptyState.waitForExistence(timeout: 5)
+            || compactEmptyState.waitForExistence(timeout: 2)
+        XCTAssertTrue(emptyStateAppeared)
+        attachScreenshot(named: "library-empty-state")
+    }
+
+    func testRecipeDetailSnapshots() {
+        let app = launchSampleApp()
+        openSampleRecipe(in: app)
+        attachScreenshot(named: "recipe-detail-top")
+
+        let scrollView = app.scrollViews.firstMatch
+        XCTAssertTrue(scrollView.waitForExistence(timeout: 3))
+        scrollView.swipeUp()
+        Thread.sleep(forTimeInterval: 0.75)
+        attachScreenshot(named: "recipe-detail-stages")
     }
 
     private func launchSampleApp() -> XCUIApplication {
@@ -53,6 +93,13 @@ final class RecipeTimelineUITests: XCTestCase {
         app.launchArguments = ["--ui-testing"]
         app.launch()
         return app
+    }
+
+    private func useLandscapeOrientation() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        addTeardownBlock {
+            XCUIDevice.shared.orientation = .portrait
+        }
     }
 
     private func openSampleRecipe(in app: XCUIApplication) {

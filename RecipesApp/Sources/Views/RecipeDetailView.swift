@@ -3,6 +3,11 @@ import SwiftData
 import SwiftUI
 
 struct RecipeDetailView: View {
+    private struct LoadIdentity: Hashable {
+        let recordID: String
+        let updatedAt: Date
+    }
+
     private enum DetailSheet: String, Identifiable {
         case editor
         case source
@@ -12,6 +17,7 @@ struct RecipeDetailView: View {
     let record: RecipeRecord
     @Environment(AppRouter.self) private var router
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var recipe: RecipeV1?
     @State private var servings = 1.0
     @State private var units: UnitSystemPreference = .metric
@@ -26,9 +32,13 @@ struct RecipeDetailView: View {
                         recipeHeader(recipe)
                         prepSection(recipe)
                         uncertaintySection(recipe)
-                        if horizontalSizeClass == .compact {
-                            FocusedStepList(recipe: recipe)
-                                .padding(.horizontal)
+                        if horizontalSizeClass == .compact || dynamicTypeSize.isAccessibilitySize {
+                            FocusedStepList(
+                                recipe: recipe,
+                                servings: Decimal(servings),
+                                units: units
+                            )
+                            .padding(.horizontal)
                         } else {
                             TimelineGridView(
                                 recipe: recipe,
@@ -41,7 +51,7 @@ struct RecipeDetailView: View {
                     }
                     .padding(.vertical, 22)
                 }
-                .safeAreaInset(edge: .bottom) {
+                .safeAreaInset(edge: .bottom, alignment: .trailing) {
                     startCookingBar(recipe)
                 }
             } else {
@@ -56,6 +66,8 @@ struct RecipeDetailView: View {
                 Button("Edit", systemImage: "slider.horizontal.3") { presentedSheet = .editor }
             }
         }
+        .toolbarBackground(RecipeTheme.paper, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
             case .editor:
@@ -67,9 +79,11 @@ struct RecipeDetailView: View {
                 RecipeSourceView(record: record)
             }
         }
-        .task(id: record.updatedAt) {
+        .task(id: LoadIdentity(recordID: record.id, updatedAt: record.updatedAt)) {
+            recipe = nil
+            servings = 1
             recipe = try? record.recipe()
-            if let recipe, servings == 1 {
+            if let recipe {
                 servings = NSDecimalNumber(decimal: recipe.recipeYield.servings).doubleValue
             }
         }
@@ -90,22 +104,37 @@ struct RecipeDetailView: View {
                 }
                 Spacer()
             }
-            HStack(spacing: 18) {
-                Stepper(value: $servings, in: 1...100, step: 1) {
-                    LabeledContent("Servings", value: servings.formatted(.number.precision(.fractionLength(0...1))))
-                        .frame(minWidth: 145)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 18) {
+                    servingsControl
+                        .fixedSize()
+                    unitsControl
                 }
-                .fixedSize()
-                Picker("Units", selection: $units) {
-                    Text("Source").tag(UnitSystemPreference.source)
-                    Text("Metric").tag(UnitSystemPreference.metric)
-                    Text("Imperial").tag(UnitSystemPreference.imperial)
+
+                VStack(alignment: .leading, spacing: 14) {
+                    servingsControl
+                    unitsControl
                 }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: 360)
             }
         }
         .padding(.horizontal)
+    }
+
+    private var servingsControl: some View {
+        Stepper(value: $servings, in: 1...100, step: 1) {
+            LabeledContent("Servings", value: servings.formatted(.number.precision(.fractionLength(0...1))))
+                .frame(minWidth: 145)
+        }
+    }
+
+    private var unitsControl: some View {
+        Picker("Units", selection: $units) {
+            Text("Source").tag(UnitSystemPreference.source)
+            Text("Metric").tag(UnitSystemPreference.metric)
+            Text("Imperial").tag(UnitSystemPreference.imperial)
+        }
+        .pickerStyle(.segmented)
+        .frame(maxWidth: 360)
     }
 
     @ViewBuilder
@@ -115,8 +144,20 @@ struct RecipeDetailView: View {
                 Text("Prep checklist")
                     .font(.title2.weight(.semibold))
                 ForEach(recipe.prepTasks.sorted { $0.sortIndex < $1.sortIndex }) { task in
-                    Label(task.instruction, systemImage: task.isOptional ? "circle.dashed" : "circle")
-                        .foregroundStyle(RecipeTheme.ink)
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text("•")
+                            .fontWeight(.bold)
+                            .foregroundStyle(RecipeTheme.secondaryInk)
+                            .accessibilityHidden(true)
+                        Text(task.instruction)
+                        if task.isOptional {
+                            Text("Optional")
+                                .font(.caption)
+                                .foregroundStyle(RecipeTheme.secondaryInk)
+                        }
+                    }
+                    .foregroundStyle(RecipeTheme.ink)
+                    .accessibilityElement(children: .combine)
                 }
             }
             .padding(.horizontal)
@@ -146,24 +187,55 @@ struct RecipeDetailView: View {
     }
 
     private func startCookingBar(_ recipe: RecipeV1) -> some View {
-        VStack(spacing: 4) {
-            if let cookError {
-                Text(cookError).font(.footnote).foregroundStyle(RecipeTheme.warning)
+        Group {
+            if horizontalSizeClass == .compact {
+                VStack(spacing: 6) {
+                    cookErrorMessage
+                    startCookingButton(recipe, fillsWidth: true)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal)
+                .padding(.vertical, 12)
+                .background(.ultraThinMaterial)
+            } else {
+                VStack(alignment: .trailing, spacing: 6) {
+                    cookErrorMessage
+                    startCookingButton(recipe, fillsWidth: false)
+                }
+                .padding(10)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(RecipeTheme.grid.opacity(0.45), lineWidth: 0.5)
+                }
+                .padding(.trailing, 16)
+                .padding(.bottom, 10)
             }
-            Button {
-                Task { await startCooking(recipe) }
-            } label: {
-                Label("Start cooking", systemImage: "play.fill")
-                    .font(.headline)
-                    .frame(maxWidth: 420)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .accessibilityIdentifier("start-cooking")
         }
-        .frame(maxWidth: .infinity)
-        .padding()
-        .background(.ultraThinMaterial)
+    }
+
+    @ViewBuilder
+    private var cookErrorMessage: some View {
+        if let cookError {
+            Text(cookError)
+                .font(.footnote)
+                .foregroundStyle(RecipeTheme.warning)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: 360, alignment: .trailing)
+        }
+    }
+
+    private func startCookingButton(_ recipe: RecipeV1, fillsWidth: Bool) -> some View {
+        Button {
+            Task { await startCooking(recipe) }
+        } label: {
+            Label("Start cooking", systemImage: "play.fill")
+                .font(.headline)
+                .frame(maxWidth: fillsWidth ? .infinity : nil)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .accessibilityIdentifier("start-cooking")
     }
 
     private func startCooking(_ recipe: RecipeV1) async {

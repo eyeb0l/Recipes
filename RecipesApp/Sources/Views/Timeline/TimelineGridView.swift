@@ -7,6 +7,140 @@ struct TimelineCookPresentation {
     var completedStageIDs: Set<String> = []
 }
 
+struct TimelineGridMetrics: Equatable {
+    let ingredientWidth: CGFloat
+    let rowHeight: CGFloat
+    let globalSlotHeight: CGFloat
+    let headerHeight: CGFloat
+    let laneWidth: CGFloat
+    let cardInset: CGFloat
+    let minimumTimelineWidth: CGFloat
+    let trailingMargin: CGFloat
+
+    init(
+        ingredientWidth: CGFloat = 274,
+        rowHeight: CGFloat = 92,
+        globalSlotHeight: CGFloat = 90,
+        headerHeight: CGFloat = 46,
+        laneWidth: CGFloat = 216,
+        cardInset: CGFloat = 12,
+        minimumTimelineWidth: CGFloat = 440,
+        trailingMargin: CGFloat = 24
+    ) {
+        self.ingredientWidth = ingredientWidth
+        self.rowHeight = rowHeight
+        self.globalSlotHeight = globalSlotHeight
+        self.headerHeight = headerHeight
+        self.laneWidth = laneWidth
+        self.cardInset = cardInset
+        self.minimumTimelineWidth = minimumTimelineWidth
+        self.trailingMargin = trailingMargin
+    }
+}
+
+struct TimelineGridGeometry {
+    let layout: TimelineLayout
+    let metrics: TimelineGridMetrics
+    let globalBandHeight: CGFloat
+    let contentWidth: CGFloat
+    let contentHeight: CGFloat
+    let columnOffsets: [Int: CGFloat]
+    let columnLaneCounts: [Int: Int]
+
+    private let globalPlacementIndex: [String: Int]
+
+    init(layout: TimelineLayout, metrics: TimelineGridMetrics) {
+        self.layout = layout
+        self.metrics = metrics
+
+        let globals = layout.placements.filter(\.isGlobal)
+        globalPlacementIndex = Dictionary(uniqueKeysWithValues: globals.enumerated().map { ($0.element.stageID, $0.offset) })
+        globalBandHeight = max(metrics.globalSlotHeight, CGFloat(max(globals.count, 1)) * metrics.globalSlotHeight)
+
+        var offsets: [Int: CGFloat] = [:]
+        var laneCounts: [Int: Int] = [:]
+        var runningX: CGFloat = 0
+        for column in 0..<layout.columnCount {
+            let laneCount = max(
+                layout.placements
+                    .filter { $0.column == column && !$0.isGlobal }
+                    .map(\.subcolumnCount)
+                    .max() ?? 1,
+                1
+            )
+            offsets[column] = runningX
+            laneCounts[column] = laneCount
+            runningX += CGFloat(laneCount) * metrics.laneWidth
+        }
+        columnOffsets = offsets
+        columnLaneCounts = laneCounts
+        contentWidth = max(runningX, metrics.minimumTimelineWidth)
+        contentHeight = metrics.headerHeight
+            + globalBandHeight
+            + CGFloat(max(layout.rowCount, 1)) * metrics.rowHeight
+    }
+
+    func headerFrame(for column: Int) -> CGRect {
+        let x = columnOffsets[column] ?? 0
+        let lanes = CGFloat(columnLaneCounts[column] ?? 1)
+        return CGRect(x: x, y: 0, width: lanes * metrics.laneWidth, height: metrics.headerHeight)
+    }
+
+    func cardFrame(for placement: TimelineStagePlacement) -> CGRect {
+        if placement.isGlobal {
+            let count = max(globalPlacementIndex.count, 1)
+            let slotHeight = globalBandHeight / CGFloat(count)
+            let index = CGFloat(globalPlacementIndex[placement.stageID] ?? 0)
+            return CGRect(
+                x: metrics.cardInset / 2,
+                y: metrics.headerHeight + index * slotHeight + metrics.cardInset / 2,
+                width: contentWidth - metrics.cardInset,
+                height: slotHeight - metrics.cardInset
+            )
+        }
+
+        let startRow = placement.startRow ?? 0
+        let rowCount = (placement.endRow ?? startRow) - startRow + 1
+        let columnX = columnOffsets[placement.column] ?? 0
+        return CGRect(
+            x: columnX + CGFloat(placement.subcolumn) * metrics.laneWidth + metrics.cardInset / 2,
+            y: metrics.headerHeight + globalBandHeight + CGFloat(startRow) * metrics.rowHeight + metrics.cardInset / 2,
+            width: metrics.laneWidth - metrics.cardInset,
+            height: CGFloat(rowCount) * metrics.rowHeight - metrics.cardInset
+        )
+    }
+
+    func inputMarkerOffsets(for placement: TimelineStagePlacement, directRows: [Int]) -> [CGFloat] {
+        guard let startRow = placement.startRow else { return [] }
+        return directRows.sorted().map { row in
+            CGFloat(row - startRow) * metrics.rowHeight
+                + metrics.rowHeight / 2
+                - metrics.cardInset / 2
+        }
+    }
+
+    var majorColumnBoundaries: [CGFloat] {
+        var boundaries = [CGFloat(0)]
+        for column in 0..<layout.columnCount {
+            boundaries.append(headerFrame(for: column).maxX)
+        }
+        return boundaries
+    }
+
+    var laneBoundaries: [CGFloat] {
+        var boundaries: [CGFloat] = []
+        for column in 0..<layout.columnCount {
+            let lanes = columnLaneCounts[column] ?? 1
+            guard lanes > 1 else { continue }
+            let origin = columnOffsets[column] ?? 0
+            for lane in 1..<lanes {
+                boundaries.append(origin + CGFloat(lane) * metrics.laneWidth)
+            }
+        }
+        return boundaries
+    }
+}
+
 struct TimelineGridView: View {
     let recipe: RecipeV1
     let servings: Decimal
@@ -14,50 +148,63 @@ struct TimelineGridView: View {
     var cookPresentation: TimelineCookPresentation?
     var onMoveStage: ((String, String) -> Void)?
 
-    private let ingredientWidth: CGFloat = 290
-    private let rowHeight: CGFloat = 78
-    private let globalHeight: CGFloat = 88
-    private let headerHeight: CGFloat = 42
-    private let columnWidth: CGFloat = 196
+    @ScaledMetric(relativeTo: .body) private var ingredientWidth: CGFloat = 274
+    @ScaledMetric(relativeTo: .body) private var rowHeight: CGFloat = 92
+    @ScaledMetric(relativeTo: .body) private var globalSlotHeight: CGFloat = 90
+    @ScaledMetric(relativeTo: .caption) private var headerHeight: CGFloat = 46
+    @ScaledMetric(relativeTo: .body) private var laneWidth: CGFloat = 216
+    @ScaledMetric(relativeTo: .body) private var cardInset: CGFloat = 12
+    @ScaledMetric(relativeTo: .body) private var quantityWidth: CGFloat = 76
 
     var body: some View {
         let layout = try? TimelineLayoutEngine.makeLayout(for: recipe)
         if let layout {
-            let globalCount = layout.placements.filter(\.isGlobal).count
-            let globalBandHeight = max(globalHeight, CGFloat(max(globalCount, 1)) * 68)
+            let metrics = TimelineGridMetrics(
+                ingredientWidth: ingredientWidth,
+                rowHeight: rowHeight,
+                globalSlotHeight: globalSlotHeight,
+                headerHeight: headerHeight,
+                laneWidth: laneWidth,
+                cardInset: cardInset
+            )
+            let geometry = TimelineGridGeometry(layout: layout, metrics: metrics)
             ScrollView(.vertical) {
                 HStack(alignment: .top, spacing: 0) {
-                    ingredientColumn(globalBandHeight: globalBandHeight)
-                    Divider().overlay(RecipeTheme.grid)
+                    ingredientColumn(geometry: geometry)
+                    Rectangle()
+                        .fill(RecipeTheme.grid)
+                        .frame(width: 1, height: geometry.contentHeight)
                     ScrollView(.horizontal) {
-                        timelineContent(layout: layout, globalBandHeight: globalBandHeight)
+                        timelineContent(layout: layout, geometry: geometry)
                     }
+                    .contentMargins(.trailing, metrics.trailingMargin, for: .scrollContent)
                     .scrollIndicators(.visible)
                 }
             }
             .background(RecipeTheme.surface)
-            .overlay { Rectangle().stroke(RecipeTheme.grid, lineWidth: 1) }
+            .overlay { Rectangle().stroke(RecipeTheme.grid.opacity(0.8), lineWidth: 1) }
         } else {
             ContentUnavailableView("Timeline unavailable", systemImage: "exclamationmark.triangle", description: Text("Resolve invalid stage dependencies in the editor."))
         }
     }
 
-    private func ingredientColumn(globalBandHeight: CGFloat) -> some View {
-        VStack(spacing: 0) {
+    private func ingredientColumn(geometry: TimelineGridGeometry) -> some View {
+        let metrics = geometry.metrics
+        return VStack(spacing: 0) {
             Text("INGREDIENTS")
                 .font(.caption.weight(.semibold))
                 .tracking(1.4)
                 .foregroundStyle(RecipeTheme.secondaryInk)
-                .frame(maxWidth: .infinity, minHeight: headerHeight, alignment: .leading)
                 .padding(.horizontal, 16)
+                .frame(width: metrics.ingredientWidth, height: metrics.headerHeight, alignment: .leading)
                 .background(RecipeTheme.paper)
             Text("PREP & GLOBAL")
-                .font(.caption2.weight(.semibold))
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(RecipeTheme.secondaryInk)
-                .frame(maxWidth: .infinity, minHeight: globalBandHeight, alignment: .leading)
                 .padding(.horizontal, 16)
+                .frame(width: metrics.ingredientWidth, height: geometry.globalBandHeight, alignment: .leading)
                 .background(RecipeTheme.paper.opacity(0.7))
-                .overlay(alignment: .bottom) { Divider().overlay(RecipeTheme.grid) }
+                .overlay(alignment: .bottom) { Rectangle().fill(RecipeTheme.grid).frame(height: 1) }
             ForEach(recipe.sortedIngredients) { ingredient in
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text(ingredient.displayQuantity(
@@ -65,91 +212,91 @@ struct TimelineGridView: View {
                         originalServings: recipe.recipeYield.servings,
                         units: units
                     ) ?? "—")
-                    .font(.subheadline.monospacedDigit().weight(.semibold))
-                    .frame(width: 82, alignment: .trailing)
+                    .font(.body.monospacedDigit().weight(.semibold))
+                    .frame(width: quantityWidth, alignment: .trailing)
                     Text(ingredient.name)
                         .font(.body)
                         .lineLimit(2)
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 14)
-                .frame(width: ingredientWidth, height: rowHeight, alignment: .leading)
+                .frame(width: metrics.ingredientWidth, height: metrics.rowHeight, alignment: .leading)
                 .background(RecipeTheme.surface)
-                .overlay(alignment: .bottom) { Divider().overlay(RecipeTheme.grid) }
+                .overlay(alignment: .bottom) { Rectangle().fill(RecipeTheme.gridSubtle).frame(height: 0.75) }
                 .accessibilityElement(children: .combine)
             }
         }
-        .frame(width: ingredientWidth)
+        .frame(width: metrics.ingredientWidth)
     }
 
-    private func timelineContent(layout: TimelineLayout, globalBandHeight: CGFloat) -> some View {
-        let width = max(CGFloat(layout.columnCount) * columnWidth, 440)
-        let height = headerHeight + globalBandHeight + CGFloat(max(layout.rowCount, 1)) * rowHeight
+    private func timelineContent(layout: TimelineLayout, geometry: TimelineGridGeometry) -> some View {
+        let metrics = geometry.metrics
         let stages = Dictionary(uniqueKeysWithValues: recipe.stages.map { ($0.id, $0) })
+        let rowByIngredient = Dictionary(uniqueKeysWithValues: recipe.sortedIngredients.enumerated().map { ($0.element.id, $0.offset) })
         let warningStageIDs = Set(recipe.uncertainties.filter { !$0.isResolved }.flatMap(\.stageIDs))
-        let globalPlacements = layout.placements.filter(\.isGlobal)
-        let globalIndex = Dictionary(uniqueKeysWithValues: globalPlacements.enumerated().map { ($0.element.stageID, $0.offset) })
 
         return ZStack(alignment: .topLeading) {
             Canvas { context, size in
-                var path = Path()
-                path.move(to: CGPoint(x: 0, y: headerHeight))
-                path.addLine(to: CGPoint(x: size.width, y: headerHeight))
-                path.move(to: CGPoint(x: 0, y: headerHeight + globalBandHeight))
-                path.addLine(to: CGPoint(x: size.width, y: headerHeight + globalBandHeight))
-                for row in 0...layout.rowCount {
-                    let y = headerHeight + globalBandHeight + CGFloat(row) * rowHeight
-                    path.move(to: CGPoint(x: 0, y: y))
-                    path.addLine(to: CGPoint(x: size.width, y: y))
+                var subtleRules = Path()
+                if layout.rowCount > 0 {
+                    for row in 1...layout.rowCount {
+                        let y = metrics.headerHeight + geometry.globalBandHeight + CGFloat(row) * metrics.rowHeight
+                        subtleRules.move(to: CGPoint(x: 0, y: y))
+                        subtleRules.addLine(to: CGPoint(x: size.width, y: y))
+                    }
                 }
-                for column in 0...layout.columnCount {
-                    let x = CGFloat(column) * columnWidth
-                    path.move(to: CGPoint(x: x, y: 0))
-                    path.addLine(to: CGPoint(x: x, y: size.height))
+                for x in geometry.laneBoundaries {
+                    subtleRules.move(to: CGPoint(x: x, y: 0))
+                    subtleRules.addLine(to: CGPoint(x: x, y: size.height))
                 }
-                context.stroke(path, with: .color(RecipeTheme.grid), lineWidth: 1)
+                context.stroke(subtleRules, with: .color(RecipeTheme.gridSubtle), lineWidth: 0.75)
+
+                var columnRules = Path()
+                for x in geometry.majorColumnBoundaries {
+                    columnRules.move(to: CGPoint(x: x, y: 0))
+                    columnRules.addLine(to: CGPoint(x: x, y: size.height))
+                }
+                context.stroke(columnRules, with: .color(RecipeTheme.grid.opacity(0.62)), lineWidth: 0.8)
+
+                var majorRules = Path()
+                majorRules.move(to: CGPoint(x: 0, y: metrics.headerHeight))
+                majorRules.addLine(to: CGPoint(x: size.width, y: metrics.headerHeight))
+                majorRules.move(to: CGPoint(x: 0, y: metrics.headerHeight + geometry.globalBandHeight))
+                majorRules.addLine(to: CGPoint(x: size.width, y: metrics.headerHeight + geometry.globalBandHeight))
+                context.stroke(majorRules, with: .color(RecipeTheme.grid.opacity(0.88)), lineWidth: 1)
             }
 
             ForEach(0..<layout.columnCount, id: \.self) { column in
+                let frame = geometry.headerFrame(for: column)
                 Text("STAGE \(column + 1)")
-                    .font(.caption2.weight(.semibold))
+                    .font(.caption.weight(.semibold))
                     .tracking(1.2)
                     .foregroundStyle(RecipeTheme.secondaryInk)
-                    .frame(width: columnWidth, height: headerHeight)
-                    .position(x: CGFloat(column) * columnWidth + columnWidth / 2, y: headerHeight / 2)
+                    .frame(width: frame.width, height: frame.height)
+                    .offset(x: frame.minX, y: frame.minY)
             }
 
             ForEach(layout.placements) { placement in
                 if let stage = stages[placement.stageID] {
+                    let frame = geometry.cardFrame(for: placement)
+                    let directRows = Array(Set(stage.ingredientUses.compactMap { rowByIngredient[$0.ingredientID] })).sorted()
                     TimelineStageCard(
                         stage: stage,
                         warning: warningStageIDs.contains(stage.id),
                         isFocused: cookPresentation?.focusedStageID == stage.id,
                         isReady: cookPresentation?.readyStageIDs.contains(stage.id) == true,
-                        isCompleted: cookPresentation?.completedStageIDs.contains(stage.id) == true
+                        isCompleted: cookPresentation?.completedStageIDs.contains(stage.id) == true,
+                        showsLineageRail: !placement.ingredientLineage.isEmpty,
+                        inputMarkerOffsets: geometry.inputMarkerOffsets(for: placement, directRows: directRows)
                     )
-                    .frame(
-                        width: placement.isGlobal ? width - 8 : cardWidth(placement),
-                        height: cardHeight(
-                            placement,
-                            globalCount: globalPlacements.count,
-                            globalBandHeight: globalBandHeight
-                        )
-                    )
-                    .position(
-                        x: placement.isGlobal ? width / 2 : cardX(placement),
-                        y: cardY(
-                            placement,
-                            globalIndex: globalIndex[placement.stageID] ?? 0,
-                            globalCount: globalPlacements.count,
-                            globalBandHeight: globalBandHeight
-                        )
-                    )
+                    .frame(width: frame.width, height: frame.height, alignment: .topLeading)
+                    .offset(x: frame.minX, y: frame.minY)
+                    .accessibilityIdentifier("timeline-stage-\(stage.id)")
                     .draggable(stage.id) {
                         Text(stage.action)
                             .font(.headline)
                             .padding()
-                            .background(RecipeTheme.stage, in: RoundedRectangle(cornerRadius: 10))
+                            .background(RecipeTheme.timelineStage, in: RoundedRectangle(cornerRadius: 10))
                     }
                     .dropDestination(for: String.self) { items, _ in
                         guard let source = items.first, source != stage.id else { return false }
@@ -159,41 +306,8 @@ struct TimelineGridView: View {
                 }
             }
         }
-        .frame(width: width, height: height)
+        .frame(width: geometry.contentWidth, height: geometry.contentHeight)
         .background(RecipeTheme.surface)
-    }
-
-    private func cardWidth(_ placement: TimelineStagePlacement) -> CGFloat {
-        columnWidth / CGFloat(max(placement.subcolumnCount, 1)) - 8
-    }
-
-    private func cardHeight(
-        _ placement: TimelineStagePlacement,
-        globalCount: Int,
-        globalBandHeight: CGFloat
-    ) -> CGFloat {
-        if placement.isGlobal { return globalBandHeight / CGFloat(max(globalCount, 1)) - 8 }
-        return CGFloat((placement.endRow ?? 0) - (placement.startRow ?? 0) + 1) * rowHeight - 10
-    }
-
-    private func cardX(_ placement: TimelineStagePlacement) -> CGFloat {
-        let slotWidth = columnWidth / CGFloat(max(placement.subcolumnCount, 1))
-        return CGFloat(placement.column) * columnWidth + CGFloat(placement.subcolumn) * slotWidth + slotWidth / 2
-    }
-
-    private func cardY(
-        _ placement: TimelineStagePlacement,
-        globalIndex: Int,
-        globalCount: Int,
-        globalBandHeight: CGFloat
-    ) -> CGFloat {
-        if placement.isGlobal {
-            let slotHeight = globalBandHeight / CGFloat(max(globalCount, 1))
-            return headerHeight + CGFloat(globalIndex) * slotHeight + slotHeight / 2
-        }
-        let start = CGFloat(placement.startRow ?? 0)
-        let rows = CGFloat((placement.endRow ?? 0) - (placement.startRow ?? 0) + 1)
-        return headerHeight + globalBandHeight + start * rowHeight + rows * rowHeight / 2
     }
 }
 
@@ -203,12 +317,14 @@ private struct TimelineStageCard: View {
     let isFocused: Bool
     let isReady: Bool
     let isCompleted: Bool
+    let showsLineageRail: Bool
+    let inputMarkerOffsets: [CGFloat]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top) {
                 Text(stage.action)
-                    .font(.headline)
+                    .font(.title3.weight(.semibold))
                     .lineLimit(2)
                 Spacer(minLength: 3)
                 if warning {
@@ -217,35 +333,75 @@ private struct TimelineStageCard: View {
                         .accessibilityLabel("Uncertainty")
                 }
             }
-            if let detail = stageDetail {
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(RecipeTheme.secondaryInk)
-                    .lineLimit(3)
-            }
-            Spacer(minLength: 0)
-            if let duration = stage.duration {
-                Label(durationLabel(duration), systemImage: "timer")
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(isFocused ? RecipeTheme.ink : RecipeTheme.secondaryInk)
+            if stageDetail != nil || stage.duration != nil {
+                HStack(alignment: .center, spacing: 8) {
+                    if let detail = stageDetail {
+                        Text(detail)
+                            .font(.subheadline)
+                            .foregroundStyle(RecipeTheme.secondaryInk)
+                            .lineLimit(stage.duration == nil ? 3 : 2)
+                    }
+                    if stageDetail != nil, stage.duration != nil {
+                        Spacer(minLength: 2)
+                    }
+                    if let duration = stage.duration {
+                        Label(durationLabel(duration), systemImage: "timer")
+                            .font(.footnote.monospacedDigit().weight(.medium))
+                            .foregroundStyle(isFocused ? RecipeTheme.ink : RecipeTheme.secondaryInk)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
+                            .background(RecipeTheme.surface.opacity(0.68), in: Capsule())
+                            .fixedSize()
+                    }
+                }
             }
         }
-        .padding(10)
-        .background(background, in: RoundedRectangle(cornerRadius: 8))
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(background, in: RoundedRectangle(cornerRadius: 10))
         .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isFocused || isReady ? RecipeTheme.focus : RecipeTheme.grid, lineWidth: isFocused ? 3 : 1)
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(borderColor, lineWidth: isFocused ? 3 : (isReady ? 2 : 1))
         }
+        .overlay(alignment: .leading) {
+            if showsLineageRail {
+                lineageRail
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10))
         .opacity(isCompleted ? 0.32 : 1)
         .animation(.easeInOut(duration: 0.2), value: isCompleted)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
     }
 
+    private var lineageRail: some View {
+        Canvas { context, size in
+            let x: CGFloat = 2.5
+            var rail = Path()
+            rail.move(to: CGPoint(x: x, y: 8))
+            rail.addLine(to: CGPoint(x: x, y: max(8, size.height - 8)))
+            context.stroke(rail, with: .color(RecipeTheme.focus.opacity(isFocused ? 0.9 : 0.5)), lineWidth: 3)
+
+            for marker in inputMarkerOffsets {
+                let y = min(max(marker, 7), max(7, size.height - 7))
+                let dot = CGRect(x: x - 4, y: y - 4, width: 8, height: 8)
+                context.fill(Path(ellipseIn: dot), with: .color(RecipeTheme.focus))
+            }
+        }
+        .frame(width: 9)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private var borderColor: Color {
+        isFocused || isReady ? RecipeTheme.focus : RecipeTheme.timelineStageBorder
+    }
+
     private var background: Color {
-        if isFocused { return RecipeTheme.focus.opacity(0.28) }
-        if isReady { return RecipeTheme.focus.opacity(0.14) }
-        return stage.sortIndex.isMultiple(of: 2) ? RecipeTheme.stage : RecipeTheme.stageAlternate
+        if isFocused { return RecipeTheme.focus.opacity(0.3) }
+        if isReady { return RecipeTheme.focus.opacity(0.16) }
+        return stage.sortIndex.isMultiple(of: 2) ? RecipeTheme.timelineStage : RecipeTheme.timelineStageAlternate
     }
 
     private var stageDetail: String? {

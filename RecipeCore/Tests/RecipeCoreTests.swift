@@ -115,9 +115,40 @@ final class RecipeCoreTests: XCTestCase {
         XCTAssertEqual(placements[pastaStage.id]?.column, 0)
         XCTAssertEqual(placements[sauceStage.id]?.subcolumn, 0)
         XCTAssertEqual(placements[pastaStage.id]?.subcolumn, 0)
+        XCTAssertEqual(placements[sauceStage.id]?.subcolumnCount, 1)
+        XCTAssertEqual(placements[pastaStage.id]?.subcolumnCount, 1)
         XCTAssertEqual(placements[merge.id]?.column, 1)
         XCTAssertEqual(placements[merge.id]?.startRow, 0)
         XCTAssertEqual(placements[merge.id]?.endRow, 1)
+    }
+
+    func testCollisionLaneCountsAreScopedToConnectedRowIntervals() throws {
+        let first = Ingredient(id: "first-ingredient", name: "first", sortIndex: 0)
+        let second = Ingredient(id: "second-ingredient", name: "second", sortIndex: 1)
+        let third = Ingredient(id: "third-ingredient", name: "third", sortIndex: 2)
+        let stages = [
+            Stage(id: "a", action: "A", instruction: "Use first in A", ingredientUses: [.init(ingredientID: first.id)], sortIndex: 0),
+            Stage(id: "b", action: "B", instruction: "Use first in B", ingredientUses: [.init(ingredientID: first.id)], sortIndex: 1),
+            Stage(id: "c", action: "C", instruction: "Use second", ingredientUses: [.init(ingredientID: second.id)], sortIndex: 2),
+            Stage(id: "d", action: "D", instruction: "Use third", ingredientUses: [.init(ingredientID: third.id)], sortIndex: 3),
+        ]
+        let recipe = RecipeV1(
+            title: "Collision groups",
+            recipeYield: .init(servings: 1),
+            ingredients: [first, second, third],
+            stages: stages,
+            provenance: .init(sourceType: .manual)
+        )
+
+        let placements = Dictionary(uniqueKeysWithValues: try TimelineLayoutEngine.makeLayout(for: recipe).placements.map { ($0.stageID, $0) })
+        XCTAssertEqual(placements["a"]?.subcolumn, 0)
+        XCTAssertEqual(placements["b"]?.subcolumn, 1)
+        XCTAssertEqual(placements["a"]?.subcolumnCount, 2)
+        XCTAssertEqual(placements["b"]?.subcolumnCount, 2)
+        XCTAssertEqual(placements["c"]?.subcolumn, 0)
+        XCTAssertEqual(placements["c"]?.subcolumnCount, 1)
+        XCTAssertEqual(placements["d"]?.subcolumn, 0)
+        XCTAssertEqual(placements["d"]?.subcolumnCount, 1)
     }
 
     func testLayoutOutputIsDeterministicForLongParallelMergeRecipe() throws {

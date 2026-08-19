@@ -99,16 +99,36 @@ public enum TimelineLayoutEngine {
                 let rhs = (drafts[$1].startRow ?? -1, drafts[$1].endRow ?? -1, drafts[$1].stageID)
                 return lhs < rhs
             }
-            var occupiedEnds: [Int] = []
+
+            // Lane counts belong to a connected group of overlapping row intervals, not
+            // to the entire topological column. A collision near the top of a recipe
+            // should not squeeze a later, non-overlapping stage into the same narrow lanes.
+            var components: [[Int]] = []
+            var componentMaximumEnd: Int?
             for index in nonGlobal {
                 let start = drafts[index].startRow ?? 0
                 let end = drafts[index].endRow ?? start
-                let slot = occupiedEnds.firstIndex(where: { $0 < start }) ?? occupiedEnds.count
-                if slot == occupiedEnds.count { occupiedEnds.append(end) } else { occupiedEnds[slot] = end }
-                drafts[index].subcolumn = slot
+                if let maximumEnd = componentMaximumEnd, start <= maximumEnd {
+                    components[components.count - 1].append(index)
+                    componentMaximumEnd = max(maximumEnd, end)
+                } else {
+                    components.append([index])
+                    componentMaximumEnd = end
+                }
             }
-            let count = max(occupiedEnds.count, 1)
-            for index in indices { drafts[index].subcolumnCount = count }
+
+            for component in components {
+                var occupiedEnds: [Int] = []
+                for index in component {
+                    let start = drafts[index].startRow ?? 0
+                    let end = drafts[index].endRow ?? start
+                    let slot = occupiedEnds.firstIndex(where: { $0 < start }) ?? occupiedEnds.count
+                    if slot == occupiedEnds.count { occupiedEnds.append(end) } else { occupiedEnds[slot] = end }
+                    drafts[index].subcolumn = slot
+                }
+                let count = max(occupiedEnds.count, 1)
+                for index in component { drafts[index].subcolumnCount = count }
+            }
         }
 
         let placements = drafts.map {

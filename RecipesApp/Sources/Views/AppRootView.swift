@@ -31,7 +31,11 @@ struct AppRootView: View {
             CookModeHost(sessionID: route.id)
         }
         .task {
-            guard ProcessInfo.processInfo.arguments.contains("--ui-testing"), records.isEmpty else { return }
+            let arguments = ProcessInfo.processInfo.arguments
+            guard arguments.contains("--ui-testing"),
+                  !arguments.contains("--ui-testing-empty-library"),
+                  records.isEmpty
+            else { return }
             try? modelContext.insert(RecipeRecord(recipe: SampleRecipe.espressoBrownies))
             try? modelContext.save()
         }
@@ -117,11 +121,29 @@ private struct RecipeLibraryList: View {
     @ViewBuilder
     private var rows: some View {
         ForEach(records) { record in
+            let isSelected = selection?.wrappedValue == record.id
             NavigationLink(value: record.id) {
                 RecipeLibraryRow(record: record)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        isSelected ? RecipeTheme.focus.opacity(0.11) : RecipeTheme.surface,
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(
+                                isSelected ? RecipeTheme.focus.opacity(0.9) : RecipeTheme.gridSubtle,
+                                lineWidth: isSelected ? 1.5 : 0.75
+                            )
+                    }
+                    .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             .tag(record.id)
-            .listRowBackground(RecipeTheme.surface)
+            .listRowInsets(.init(top: 6, leading: 12, bottom: 6, trailing: 12))
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
             .swipeActions {
                 Button(role: .destructive) {
                     modelContext.delete(record)
@@ -160,6 +182,7 @@ private struct RecipeLibraryRow: View {
                         .labelStyle(.titleAndIcon)
                         .font(.caption)
                         .foregroundStyle(RecipeTheme.warning)
+                        .accessibilityLabel("\(record.unresolvedWarningCount) unresolved source warning\(record.unresolvedWarningCount == 1 ? "" : "s")")
                 }
             }
             if !record.summaryText.isEmpty {
@@ -169,22 +192,47 @@ private struct RecipeLibraryRow: View {
                     .lineLimit(2)
             }
         }
-        .padding(.vertical, 5)
     }
 }
 
 private struct EmptyLibraryDetail: View {
     let onImport: () -> Void
+    @ScaledMetric(relativeTo: .largeTitle) private var illustrationSize = 68
+    @ScaledMetric(relativeTo: .body) private var contentSpacing = 24
 
     var body: some View {
-        ContentUnavailableView {
-            Label("Choose a recipe", systemImage: "rectangle.split.3x1")
-        } description: {
-            Text("The landscape timeline keeps ingredients on the left and cooking stages moving across the page.")
-        } actions: {
-            Button("Import recipe", action: onImport)
-                .buttonStyle(.borderedProminent)
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(spacing: contentSpacing) {
+                    Image(systemName: "rectangle.split.3x1")
+                        .font(.system(size: illustrationSize, weight: .light))
+                        .foregroundStyle(RecipeTheme.secondaryInk)
+                        .accessibilityHidden(true)
+
+                    VStack(spacing: 10) {
+                        Text("Choose a recipe")
+                            .font(.largeTitle.weight(.semibold))
+                            .accessibilityAddTraits(.isHeader)
+                            .accessibilitySortPriority(3)
+                        Text("The landscape timeline keeps ingredients on the left and cooking stages moving across the page.")
+                            .font(.title3)
+                            .foregroundStyle(RecipeTheme.secondaryInk)
+                            .multilineTextAlignment(.center)
+                            .accessibilitySortPriority(2)
+                    }
+
+                    Button("Import recipe", action: onImport)
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .accessibilitySortPriority(1)
+                }
+                .frame(maxWidth: 680)
+                .padding(40)
+                .frame(maxWidth: .infinity, minHeight: proxy.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
         }
+        .background(RecipeTheme.paper.ignoresSafeArea())
+        .accessibilityIdentifier("empty-library-detail")
     }
 }
-
