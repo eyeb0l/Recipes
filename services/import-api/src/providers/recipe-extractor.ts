@@ -8,6 +8,25 @@ export interface RecipeExtractor {
   extract(source: NormalizedRecipeSource, requestID: string): Promise<ExtractionResult>;
 }
 
+export async function fetchProviderResponse(
+  fetcher: typeof fetch,
+  input: RequestInfo | URL,
+  init: RequestInit
+): Promise<Response> {
+  try {
+    return await fetcher(input, init);
+  } catch (error) {
+    if (error instanceof APIError) throw error;
+    const name = typeof error === "object" && error !== null && "name" in error
+      ? String(error.name)
+      : "";
+    if (name === "TimeoutError" || name === "AbortError") {
+      throw new APIError(504, "provider_timeout", "Recipe extraction took too long. Please try again.");
+    }
+    throw new APIError(503, "provider_unavailable", "The configured extraction provider could not be reached. Please try again.");
+  }
+}
+
 export function providerSchema(): Record<string, unknown> {
   const { $schema: _, title: __, ...schema } = canonicalRecipeSchema;
   return schema;

@@ -2,6 +2,7 @@ import { APIError } from "../errors";
 import type { ExtractionResult, NormalizedRecipeSource } from "../types";
 import {
   extractionPrompt,
+  fetchProviderResponse,
   imageDataURL,
   parseProviderJSON,
   providerSchema,
@@ -23,7 +24,7 @@ export class OpenAIExtractor implements RecipeExtractor {
   async extract(source: NormalizedRecipeSource, requestID: string): Promise<ExtractionResult> {
     const content: Array<Record<string, unknown>> = [{ type: "input_text", text: extractionPrompt(source) }];
     for (const image of source.images) content.push({ type: "input_image", image_url: imageDataURL(image), detail: "high" });
-    const response = await this.fetcher("https://api.openai.com/v1/responses", {
+    const response = await fetchProviderResponse(this.fetcher, "https://api.openai.com/v1/responses", {
       method: "POST",
       signal: AbortSignal.timeout(110_000),
       headers: {

@@ -14,6 +14,7 @@ describe("provider adapters", () => {
     const result = await new GrokExtractor("grok-4.6", "xai-test", fetcher as typeof fetch).extract(source, "request-1");
     const body = JSON.parse(fetcher.mock.calls[0]![1]!.body as string);
     expect(body.model).toBe("grok-4.6");
+    expect(body.reasoning_effort).toBe("low");
     expect(body.response_format.json_schema.strict).toBe(true);
     expect(result.provider).toBe("grok");
   });
@@ -33,5 +34,18 @@ describe("provider adapters", () => {
     await expect(new GrokExtractor("grok-4.6", "xai-test", fetcher as typeof fetch).extract(source, "request-3"))
       .rejects.toMatchObject({ code: "provider_error" });
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports provider timeouts without exposing an internal error", async () => {
+    const timeout = Object.assign(new Error("request aborted"), { name: "TimeoutError" });
+    const fetcher = vi.fn(async () => { throw timeout; });
+    await expect(new GrokExtractor("grok-4.6", "xai-test", fetcher as typeof fetch).extract(source, "request-4"))
+      .rejects.toMatchObject({ status: 504, code: "provider_timeout" });
+  });
+
+  it("reports provider transport failures without exposing an internal error", async () => {
+    const fetcher = vi.fn(async () => { throw new TypeError("network unavailable"); });
+    await expect(new OpenAIExtractor("gpt-5.6-luna", "sk-test", fetcher as typeof fetch).extract(source, "request-5"))
+      .rejects.toMatchObject({ status: 503, code: "provider_unavailable" });
   });
 });

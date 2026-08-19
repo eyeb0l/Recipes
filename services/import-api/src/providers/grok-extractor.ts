@@ -2,6 +2,7 @@ import { APIError } from "../errors";
 import type { ExtractionResult, NormalizedRecipeSource } from "../types";
 import {
   extractionPrompt,
+  fetchProviderResponse,
   imageDataURL,
   parseProviderJSON,
   providerSchema,
@@ -25,7 +26,7 @@ export class GrokExtractor implements RecipeExtractor {
     for (const image of source.images) {
       content.push({ type: "image_url", image_url: { url: imageDataURL(image), detail: "high" } });
     }
-    const response = await this.fetcher("https://api.x.ai/v1/chat/completions", {
+    const response = await fetchProviderResponse(this.fetcher, "https://api.x.ai/v1/chat/completions", {
       method: "POST",
       signal: AbortSignal.timeout(110_000),
       headers: {
@@ -36,6 +37,7 @@ export class GrokExtractor implements RecipeExtractor {
       body: JSON.stringify({
         model: this.model,
         messages: [{ role: "user", content }],
+        reasoning_effort: "low",
         temperature: 0,
         stream: false,
         response_format: {
