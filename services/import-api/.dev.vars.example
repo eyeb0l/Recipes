@@ -5,6 +5,6 @@ XAI_API_KEY=xai-replace-me
 
 # Optional local overrides
 APPLE_CLIENT_ID=com.irisgiertuga.RecipeTimeline
-RECIPE_PROVIDER=grok
+RECIPE_PROVIDER=openai
 GROK_MODEL=grok-4.6
 OPENAI_MODEL=gpt-5.6-luna

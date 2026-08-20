@@ -1,14 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
 import { GrokExtractor } from "../src/providers/grok-extractor";
 import { OpenAIExtractor } from "../src/providers/openai-extractor";
+import { createExtractor } from "../src/providers";
 import type { NormalizedRecipeSource } from "../src/types";
-import { validRecipe } from "./fixtures";
+import { testEnv, validRecipe } from "./fixtures";
 
 const source: NormalizedRecipeSource = {
   sourceType: "text", prose: "Mix 100 g flour with water to make two pancakes.", images: [], locale: "en_GB", preferredUnitSystem: "metric"
 };
 
 describe("provider adapters", () => {
+  it("defaults the deployment to OpenAI Luna and keeps Grok explicit", () => {
+    const active = createExtractor(testEnv());
+    expect(active.provider).toBe("openai");
+    expect(active.model).toBe("gpt-5.6-luna");
+
+    const legacy = createExtractor(testEnv({ RECIPE_PROVIDER: "grok" }));
+    expect(legacy.provider).toBe("grok");
+    expect(legacy.model).toBe("grok-4.6");
+  });
+
   it("sends Grok the strict shared schema without fallback", async () => {
     const fetcher = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(validRecipe()) } }] }), { status: 200 }));
     const result = await new GrokExtractor("grok-4.6", "xai-test", fetcher as typeof fetch).extract(source, "request-1");

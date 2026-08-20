@@ -12,7 +12,7 @@ pnpm dev
 
 Set a random `SESSION_SIGNING_KEY` of at least 32 bytes and the key for the configured provider. `.dev.vars`, source text, images, URLs, provider payloads, and canonical recipes must never be committed or logged.
 
-The default provider is `grok` with model ID `grok-4.6`. If account discovery or structured output fails, the request fails; it does not fall back to OpenAI. Set `RECIPE_PROVIDER=openai` to test the explicit OpenAI deployment configuration using `gpt-5.6-luna`.
+The default provider is OpenAI with model ID `gpt-5.6-luna`. If account discovery or structured output fails, the request fails; it does not fall back to Grok. Set `RECIPE_PROVIDER=grok` only when explicitly testing the Grok adapter with `grok-4.6`.
 
 ## Cloudflare provisioning
 

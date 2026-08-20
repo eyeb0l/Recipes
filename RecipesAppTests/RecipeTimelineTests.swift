@@ -91,6 +91,11 @@ final class RecipeTimelineTests: XCTestCase {
         XCTAssertNotNil(workbook.range(of: Data("Imperial".utf8)))
         XCTAssertNotNil(workbook.range(of: Data("3 min".utf8)))
         XCTAssertNotNil(workbook.range(of: Data("30–40 min".utf8)))
+        XCTAssertNotNil(workbook.range(of: Data("mergeCells".utf8)))
+        XCTAssertNotNil(workbook.range(of: Data("showGridLines=\"0\"".utf8)))
+        XCTAssertNotNil(workbook.range(of: Data("FFF4F1EA".utf8)))
+        XCTAssertNotNil(workbook.range(of: Data("FF88464A".utf8)))
+        XCTAssertNotNil(workbook.range(of: Data("FFC66E71".utf8)))
         XCTAssertNil(workbook.range(of: Data(".formatted(".utf8)))
 
         let png = try Data(contentsOf: try XCTUnwrap(artifacts.first { $0.format == .png }).url)

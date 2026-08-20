@@ -148,6 +148,18 @@ enum RecipeExporter {
         return (renderer, canvasSize)
     }
 
+    private struct WorkbookWorksheet {
+        let name: String
+        let rows: [[String]]
+        let widths: [Double]
+        let rowHeights: [Double]
+        let styles: [[Int]]
+        let mergedCells: [String]
+        let frozenRows: Int
+        let frozenColumns: Int
+        let autoFilterRow: Int?
+    }
+
     private static func makeWorkbook(_ request: RecipeExportRequest) throws -> Data {
         let layout: TimelineLayout
         do {
@@ -209,13 +221,44 @@ enum RecipeExporter {
             .filter { !$0.isResolved }
             .map { [$0.severity.rawValue.capitalized, $0.message] }
 
-        let sheets: [(name: String, rows: [[String]], widths: [Double])] = [
-            ("Timeline", timeline.rows, timeline.widths),
-            ("Overview", overviewRows, [18, 72]),
-            ("Ingredients", ingredientRows, [18, 38, 52]),
-            ("Prep", prepRows, [8, 78, 12]),
-            ("Stage Details", stepRows, [8, 18, 72, 32, 52, 44]),
-            ("Source Notes", warningRows, [14, 90]),
+        let recipeTitle = request.recipe.title
+        let sheets: [WorkbookWorksheet] = [
+            timeline,
+            detailSheet(
+                name: "Overview",
+                title: recipeTitle,
+                subtitle: "RECIPE OVERVIEW",
+                rows: overviewRows,
+                widths: [20, 72]
+            ),
+            detailSheet(
+                name: "Ingredients",
+                title: recipeTitle,
+                subtitle: "INGREDIENTS  ·  SERVES \(decimalString(request.servings))  ·  \(request.units.exportTitle.uppercased())",
+                rows: ingredientRows,
+                widths: [18, 38, 52]
+            ),
+            detailSheet(
+                name: "Prep",
+                title: recipeTitle,
+                subtitle: "PREPARATION",
+                rows: prepRows,
+                widths: [8, 78, 12]
+            ),
+            detailSheet(
+                name: "Stage Details",
+                title: recipeTitle,
+                subtitle: "STAGE DETAILS",
+                rows: stepRows,
+                widths: [8, 18, 52, 26, 42, 32]
+            ),
+            detailSheet(
+                name: "Source Notes",
+                title: recipeTitle,
+                subtitle: "SOURCE NOTES",
+                rows: warningRows,
+                widths: [16, 90]
+            ),
         ]
 
         var files: [(String, Data)] = [
@@ -229,7 +272,7 @@ enum RecipeExporter {
             files.append(
                 (
                     "xl/worksheets/sheet\(index + 1).xml",
-                    Data(worksheetXML(rows: sheet.rows, widths: sheet.widths).utf8)
+                    Data(worksheetXML(sheet).utf8)
                 ))
         }
         return try StoredZipArchive.make(files: files)
@@ -238,7 +281,7 @@ enum RecipeExporter {
     private static func timelineSheet(
         request: RecipeExportRequest,
         layout: TimelineLayout
-    ) -> (rows: [[String]], widths: [Double]) {
+    ) -> WorkbookWorksheet {
         let stages = Dictionary(uniqueKeysWithValues: request.recipe.stages.map { ($0.id, $0) })
         let placements = layout.placements
         let placementsByColumn = Dictionary(grouping: placements, by: \.column)
@@ -255,35 +298,166 @@ enum RecipeExporter {
             return "STAGE \(placement.column + 1)\(suffix)"
         }
 
-        var rows = [["Quantity", "Ingredient"] + columnLabels]
-        rows.append(
-            ["", "Prep & global"]
-                + placements.map { placement in
-                    guard placement.isGlobal, let stage = stages[placement.stageID] else { return "" }
-                    return timelineCell(stage, units: request.units)
-                })
+        let stageColumnCount = max(placements.count, 1)
+        let columnCount = 2 + stageColumnCount
+        let lastColumn = columnName(columnCount)
+        let summary = request.recipe.summary ?? "A visual cooking timeline"
+        let metadata = "SERVES \(decimalString(request.servings))  ·  \(request.units.exportTitle.uppercased())"
 
-        for (rowIndex, ingredient) in request.recipe.sortedIngredients.enumerated() {
+        var rows: [[String]] = [
+            paddedRow([request.recipe.title], count: columnCount),
+            paddedRow([summary], count: columnCount),
+            paddedRow([metadata], count: columnCount),
+            Array(repeating: "", count: columnCount),
+            paddedRow(["QUANTITY", "INGREDIENT"] + columnLabels, count: columnCount),
+            paddedRow(["", "PREP & GLOBAL"], count: columnCount),
+        ]
+        var styles: [[Int]] = [
+            Array(repeating: 1, count: columnCount),
+            Array(repeating: 2, count: columnCount),
+            Array(repeating: 3, count: columnCount),
+            Array(repeating: 15, count: columnCount),
+            Array(repeating: 4, count: columnCount),
+            [5, 7] + Array(repeating: 8, count: stageColumnCount),
+        ]
+        var rowHeights: [Double] = [42, textRowHeight(summary, width: 76, minimum: 28, maximum: 48), 24, 10, 30, 64]
+
+        for ingredient in request.recipe.sortedIngredients {
             let quantity =
                 ingredient.displayQuantity(
                     servings: request.servings,
                     originalServings: request.recipe.recipeYield.servings,
                     units: request.units
                 ) ?? ""
-            let cells = placements.map { placement -> String in
-                guard placement.ingredientLineage.contains(ingredient.id),
-                    let stage = stages[placement.stageID]
-                else { return "" }
-                if placement.startRow == rowIndex {
-                    return timelineCell(stage, units: request.units)
-                }
-                let isDirectInput = stage.ingredientUses.contains { $0.ingredientID == ingredient.id }
-                return isDirectInput ? "●" : "│"
-            }
-            rows.append([quantity, ingredient.name] + cells)
+            rows.append(paddedRow([quantity, ingredient.name], count: columnCount))
+            styles.append([5, 6] + Array(repeating: 8, count: stageColumnCount))
+            let ingredientHeight = textRowHeight(ingredient.name, width: 34, minimum: 54, maximum: 74)
+            rowHeights.append(ingredientHeight)
         }
 
-        return (rows, [18, 34] + Array(repeating: 24, count: placements.count))
+        var mergedCells = ["A1:\(lastColumn)1", "A2:\(lastColumn)2", "A3:\(lastColumn)3"]
+        for (placementIndex, placement) in placements.enumerated() {
+            guard let stage = stages[placement.stageID] else { continue }
+            let columnIndex = placementIndex + 3
+            let column = columnName(columnIndex)
+            let style = placement.column.isMultiple(of: 2) ? 9 : 10
+            if placement.isGlobal {
+                let content = timelineCell(stage, units: request.units)
+                rows[5][columnIndex - 1] = content
+                styles[5][columnIndex - 1] = style
+                rowHeights[5] = max(rowHeights[5], textRowHeight(content, width: 26, minimum: 64, maximum: 88))
+                continue
+            }
+
+            guard let startRow = placement.startRow, let endRow = placement.endRow else { continue }
+            let firstRow = startRow + 7
+            let lastRow = endRow + 7
+            guard firstRow >= 7, lastRow < rows.count + 1, firstRow <= lastRow else { continue }
+            let content = timelineCell(stage, units: request.units)
+            rows[firstRow - 1][columnIndex - 1] = content
+            for row in firstRow...lastRow {
+                styles[row - 1][columnIndex - 1] = style
+            }
+            if firstRow == lastRow {
+                rowHeights[firstRow - 1] = max(
+                    rowHeights[firstRow - 1],
+                    textRowHeight(content, width: 26, minimum: 64, maximum: 88)
+                )
+            }
+            if lastRow > firstRow {
+                mergedCells.append("\(column)\(firstRow):\(column)\(lastRow)")
+            }
+        }
+
+        return WorkbookWorksheet(
+            name: "Timeline",
+            rows: rows,
+            widths: [18, 34] + Array(repeating: 26, count: stageColumnCount),
+            rowHeights: rowHeights,
+            styles: styles,
+            mergedCells: mergedCells,
+            frozenRows: 5,
+            frozenColumns: 2,
+            autoFilterRow: nil
+        )
+    }
+
+    private static func detailSheet(
+        name: String,
+        title: String,
+        subtitle: String,
+        rows dataRows: [[String]],
+        widths: [Double]
+    ) -> WorkbookWorksheet {
+        let columnCount = max(widths.count, dataRows.map(\.count).max() ?? 1)
+        let lastColumn = columnName(columnCount)
+        var rows = [
+            paddedRow([title], count: columnCount),
+            paddedRow([subtitle], count: columnCount),
+            Array(repeating: "", count: columnCount),
+        ]
+        rows.append(contentsOf: dataRows.map { paddedRow($0, count: columnCount) })
+
+        var styles = [
+            Array(repeating: 1, count: columnCount),
+            Array(repeating: 3, count: columnCount),
+            Array(repeating: 15, count: columnCount),
+        ]
+        if !dataRows.isEmpty {
+            styles.append(Array(repeating: 4, count: columnCount))
+            for rowIndex in 1..<dataRows.count {
+                var rowStyles = Array(repeating: rowIndex.isMultiple(of: 2) ? 12 : 11, count: columnCount)
+                rowStyles[0] = 13
+                styles.append(rowStyles)
+            }
+        }
+
+        var rowHeights = [42.0, 26.0, 10.0]
+        if !dataRows.isEmpty {
+            rowHeights.append(30)
+            for values in dataRows.dropFirst() {
+                rowHeights.append(detailRowHeight(values: values, widths: widths))
+            }
+        }
+
+        return WorkbookWorksheet(
+            name: name,
+            rows: rows,
+            widths: widths,
+            rowHeights: rowHeights,
+            styles: styles,
+            mergedCells: ["A1:\(lastColumn)1", "A2:\(lastColumn)2"],
+            frozenRows: 4,
+            frozenColumns: 0,
+            autoFilterRow: dataRows.isEmpty ? nil : 4
+        )
+    }
+
+    private static func paddedRow(_ values: [String], count: Int) -> [String] {
+        Array((values + Array(repeating: "", count: max(count - values.count, 0))).prefix(count))
+    }
+
+    private static func detailRowHeight(values: [String], widths: [Double]) -> Double {
+        let lineCount =
+            values.enumerated().map { index, value in
+                estimatedLineCount(value, width: index < widths.count ? widths[index] : 18)
+            }.max() ?? 1
+        return min(max(Double(lineCount) * 15 + 10, 28), 88)
+    }
+
+    private static func textRowHeight(
+        _ value: String,
+        width: Double,
+        minimum: Double,
+        maximum: Double
+    ) -> Double {
+        min(max(Double(estimatedLineCount(value, width: width)) * 15 + 10, minimum), maximum)
+    }
+
+    private static func estimatedLineCount(_ value: String, width: Double) -> Int {
+        value.split(separator: "\n", omittingEmptySubsequences: false).reduce(0) { result, line in
+            result + max(Int(ceil(Double(max(line.count, 1)) / max(width * 1.15, 1))), 1)
+        }
     }
 
     private static func timelineCell(_ stage: Stage, units: UnitSystemPreference) -> String {
@@ -374,29 +548,107 @@ enum RecipeExporter {
 
     private static let stylesXML = """
         <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-        <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Aptos"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Aptos Display"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF88464A"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment vertical="center"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>
+        <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+          <fonts count="7">
+            <font><color rgb="FF2A2420"/><sz val="11"/><name val="Aptos"/><family val="2"/></font>
+            <font><b/><color rgb="FF2A2420"/><sz val="22"/><name val="Georgia"/><family val="1"/></font>
+            <font><color rgb="FF696058"/><sz val="11"/><name val="Aptos"/><family val="2"/></font>
+            <font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Aptos Display"/><family val="2"/></font>
+            <font><b/><color rgb="FF2A2420"/><sz val="11"/><name val="Aptos"/><family val="2"/></font>
+            <font><b/><color rgb="FF88464A"/><sz val="10"/><name val="Aptos"/><family val="2"/></font>
+            <font><b/><color rgb="FF2A2420"/><sz val="11"/><name val="Aptos"/><family val="2"/></font>
+          </fonts>
+          <fills count="10">
+            <fill><patternFill patternType="none"/></fill>
+            <fill><patternFill patternType="gray125"/></fill>
+            <fill><patternFill patternType="solid"><fgColor rgb="FFF4F1EA"/><bgColor indexed="64"/></patternFill></fill>
+            <fill><patternFill patternType="solid"><fgColor rgb="FFFBF9F4"/><bgColor indexed="64"/></patternFill></fill>
+            <fill><patternFill patternType="solid"><fgColor rgb="FF88464A"/><bgColor indexed="64"/></patternFill></fill>
+            <fill><patternFill patternType="solid"><fgColor rgb="FFE9DED3"/><bgColor indexed="64"/></patternFill></fill>
+            <fill><patternFill patternType="solid"><fgColor rgb="FFE3D6C8"/><bgColor indexed="64"/></patternFill></fill>
+            <fill><patternFill patternType="solid"><fgColor rgb="FFEEE5DD"/><bgColor indexed="64"/></patternFill></fill>
+            <fill><patternFill patternType="solid"><fgColor rgb="FFF5E5D8"/><bgColor indexed="64"/></patternFill></fill>
+            <fill><patternFill patternType="solid"><fgColor rgb="FFC66E71"/><bgColor indexed="64"/></patternFill></fill>
+          </fills>
+          <borders count="4">
+            <border><left/><right/><top/><bottom/><diagonal/></border>
+            <border><left style="thin"><color rgb="FFE8E0D5"/></left><right style="thin"><color rgb="FFE8E0D5"/></right><top style="thin"><color rgb="FFE8E0D5"/></top><bottom style="thin"><color rgb="FFE8E0D5"/></bottom><diagonal/></border>
+            <border><left style="thin"><color rgb="FF88464A"/></left><right style="thin"><color rgb="FF88464A"/></right><top style="thin"><color rgb="FF88464A"/></top><bottom style="medium"><color rgb="FF88464A"/></bottom><diagonal/></border>
+            <border><left style="medium"><color rgb="FFC66E71"/></left><right style="thin"><color rgb="FFCDBEAC"/></right><top style="thin"><color rgb="FFCDBEAC"/></top><bottom style="thin"><color rgb="FFCDBEAC"/></bottom><diagonal/></border>
+          </borders>
+          <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+          <cellXfs count="16">
+            <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+            <xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>
+            <xf numFmtId="0" fontId="2" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>
+            <xf numFmtId="0" fontId="5" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+            <xf numFmtId="0" fontId="3" fillId="4" borderId="2" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+            <xf numFmtId="0" fontId="4" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center" wrapText="1"/></xf>
+            <xf numFmtId="0" fontId="0" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1" indent="1"/></xf>
+            <xf numFmtId="0" fontId="5" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1" indent="1"/></xf>
+            <xf numFmtId="0" fontId="0" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+            <xf numFmtId="0" fontId="6" fillId="5" borderId="3" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+            <xf numFmtId="0" fontId="6" fillId="6" borderId="3" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+            <xf numFmtId="0" fontId="0" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="top" wrapText="1" indent="1"/></xf>
+            <xf numFmtId="0" fontId="0" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="top" wrapText="1" indent="1"/></xf>
+            <xf numFmtId="0" fontId="4" fillId="7" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="top" wrapText="1" indent="1"/></xf>
+            <xf numFmtId="0" fontId="0" fillId="8" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="top" wrapText="1" indent="1"/></xf>
+            <xf numFmtId="0" fontId="0" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>
+          </cellXfs>
+          <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+        </styleSheet>
         """
 
-    private static func worksheetXML(rows: [[String]], widths: [Double]) -> String {
-        let maximumColumns = max(rows.map(\.count).max() ?? 1, widths.count)
+    private static func worksheetXML(_ sheet: WorkbookWorksheet) -> String {
+        let maximumColumns = max(sheet.rows.map(\.count).max() ?? 1, sheet.widths.count)
         let columns = (0..<maximumColumns).map { index in
-            let width = index < widths.count ? widths[index] : 18
+            let width = index < sheet.widths.count ? sheet.widths[index] : 18
             return "<col min=\"\(index + 1)\" max=\"\(index + 1)\" width=\"\(width)\" customWidth=\"1\"/>"
         }.joined()
-        let rowXML = rows.enumerated().map { rowIndex, values in
-            let cells = values.enumerated().map { columnIndex, value in
+        let rowXML = sheet.rows.enumerated().map { rowIndex, values in
+            let cells = (0..<maximumColumns).map { columnIndex in
+                let value = columnIndex < values.count ? values[columnIndex] : ""
                 let reference = "\(columnName(columnIndex + 1))\(rowIndex + 1)"
-                let style = rowIndex == 0 ? 1 : 2
+                let style =
+                    rowIndex < sheet.styles.count && columnIndex < sheet.styles[rowIndex].count
+                    ? sheet.styles[rowIndex][columnIndex]
+                    : 0
                 return "<c r=\"\(reference)\" t=\"inlineStr\" s=\"\(style)\"><is><t xml:space=\"preserve\">\(xmlEscaped(value))</t></is></c>"
             }.joined()
-            let height = rowIndex == 0 ? " ht=\"22\" customHeight=\"1\"" : ""
-            return "<row r=\"\(rowIndex + 1)\"\(height)>\(cells)</row>"
+            let height = rowIndex < sheet.rowHeights.count ? sheet.rowHeights[rowIndex] : 24
+            return "<row r=\"\(rowIndex + 1)\" ht=\"\(height)\" customHeight=\"1\">\(cells)</row>"
         }.joined()
-        let lastCell = "\(columnName(maximumColumns))\(max(rows.count, 1))"
+        let lastCell = "\(columnName(maximumColumns))\(max(sheet.rows.count, 1))"
+        let pane = paneXML(frozenRows: sheet.frozenRows, frozenColumns: sheet.frozenColumns)
+        let mergeCellXML = sheet.mergedCells.map { "<mergeCell ref=\"\($0)\"/>" }.joined()
+        let mergedCells =
+            sheet.mergedCells.isEmpty
+            ? ""
+            : "<mergeCells count=\"\(sheet.mergedCells.count)\">\(mergeCellXML)</mergeCells>"
+        let autoFilter =
+            sheet.autoFilterRow.map {
+                "<autoFilter ref=\"A\($0):\(columnName(maximumColumns))\(max(sheet.rows.count, $0))\"/>"
+            } ?? ""
         return """
             <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:\(lastCell)"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/><cols>\(columns)</cols><sheetData>\(rowXML)</sheetData><autoFilter ref="A1:\(lastCell)"/></worksheet>
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><tabColor rgb="FF88464A"/><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:\(lastCell)"/><sheetViews><sheetView workbookViewId="0" showGridLines="0" zoomScale="90">\(pane)</sheetView></sheetViews><sheetFormatPr defaultRowHeight="24"/><cols>\(columns)</cols><sheetData>\(rowXML)</sheetData>\(mergedCells)\(autoFilter)<printOptions horizontalCentered="1"/><pageMargins left="0.35" right="0.35" top="0.5" bottom="0.5" header="0.2" footer="0.2"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>
             """
+    }
+
+    private static func paneXML(frozenRows: Int, frozenColumns: Int) -> String {
+        guard frozenRows > 0 || frozenColumns > 0 else { return "" }
+        let topLeftCell = "\(columnName(frozenColumns + 1))\(frozenRows + 1)"
+        let activePane: String
+        if frozenRows > 0, frozenColumns > 0 {
+            activePane = "bottomRight"
+        } else if frozenRows > 0 {
+            activePane = "bottomLeft"
+        } else {
+            activePane = "topRight"
+        }
+        let xSplit = frozenColumns > 0 ? " xSplit=\"\(frozenColumns)\"" : ""
+        let ySplit = frozenRows > 0 ? " ySplit=\"\(frozenRows)\"" : ""
+        return "<pane\(xSplit)\(ySplit) topLeftCell=\"\(topLeftCell)\" activePane=\"\(activePane)\" state=\"frozen\"/>"
     }
 
     private static func columnName(_ index: Int) -> String {

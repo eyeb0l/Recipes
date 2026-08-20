@@ -38,7 +38,7 @@ export function testEnv(overrides: Partial<Env> = {}): Env {
     IMPORT_RATE_LIMITER: { limit: async () => ({ success: true }) },
     APPLE_CLIENT_ID: "com.irisgiertuga.RecipeTimeline",
     SESSION_SIGNING_KEY: "test-only-session-signing-key-at-least-32-bytes",
-    RECIPE_PROVIDER: "grok",
+    RECIPE_PROVIDER: "openai",
     GROK_MODEL: "grok-4.6",
     OPENAI_MODEL: "gpt-5.6-luna",
     XAI_API_KEY: "xai-test",

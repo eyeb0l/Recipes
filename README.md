@@ -12,7 +12,7 @@ This repository contains the first vertical slice:
 - Per-recipe PDF, XLSX, and PNG export using the selected serving count and unit system.
 - Prep checklist, structured editing, iPad drag/drop, and iPhone list reordering.
 - Recoverable cook sessions, dependency-ready focus, concurrent timers, notifications, display-awake lifecycle, Live Activity, and App Intent controls.
-- A privacy-preserving Cloudflare Worker with Sign in with Apple authentication, quotas, URL safety controls, layered page extraction, and Grok/OpenAI adapters.
+- A privacy-preserving Cloudflare Worker with Sign in with Apple authentication, quotas, URL safety controls, layered page extraction, and an OpenAI `gpt-5.6-luna` extraction adapter.
 
 Substitutions and Reminders shopping lists are intentionally left for the next slice.
 
