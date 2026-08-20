@@ -134,7 +134,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		1044FBA45AA62A42689BF049 /* RecipeCoreTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RecipeCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		1044FBA45AA62A42689BF049 /* RecipeCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RecipeCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		13821CEDAE9B4DAAC2602068 /* RecipeModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeModels.swift; sourceTree = "<group>"; };
 		14719DDBB6A138BA9B02E65A /* ImportRecipeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportRecipeView.swift; sourceTree = "<group>"; };
 		167E3BE2DE8B4ABE5019630D /* RecipeImportClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeImportClient.swift; sourceTree = "<group>"; };
@@ -142,7 +142,7 @@
 		2D829F7ABD442D9CCD4EB746 /* RecipeTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeTheme.swift; sourceTree = "<group>"; };
 		2DEAE787FA761E745F5A42A2 /* RecipeTimelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeTimelineTests.swift; sourceTree = "<group>"; };
 		38D263C0D62D6E20D71C4320 /* UnitConversion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnitConversion.swift; sourceTree = "<group>"; };
-		3A89BC2360AE6C4C4C1EA5EA /* RecipeTimelineTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RecipeTimelineTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		3A89BC2360AE6C4C4C1EA5EA /* RecipeTimelineTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RecipeTimelineTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3E58D3E1AF3E56432B77F78D /* RecipeCookActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeCookActivityWidget.swift; sourceTree = "<group>"; };
 		4348886AE4765AC62AB14065 /* RecipeRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeRecord.swift; sourceTree = "<group>"; };
 		45DDDD787F7300FAF10C7B65 /* PersistenceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceController.swift; sourceTree = "<group>"; };
@@ -151,7 +151,7 @@
 		5206E6765E5E17D054F58567 /* RecipeDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeDetailView.swift; sourceTree = "<group>"; };
 		525F340E592B5C97366C7146 /* RecipeCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeCoreTests.swift; sourceTree = "<group>"; };
 		557401C5B6EE90282FB8F536 /* FocusedStepList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusedStepList.swift; sourceTree = "<group>"; };
-		6285EAF7C5E74DEC5E2CB40E /* RecipeTimeline.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RecipeTimeline.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6285EAF7C5E74DEC5E2CB40E /* RecipeTimeline.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RecipeTimeline.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		628CD9309569C0E8AE5C8DC2 /* AppRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRootView.swift; sourceTree = "<group>"; };
 		6F92AD5152BD96848FD9183D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		743FBD89B61C0934E9F9ED4F /* CookModeHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookModeHost.swift; sourceTree = "<group>"; };
@@ -165,11 +165,11 @@
 		93EE29C768C73BD46B02BF87 /* RecipeTimelineUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeTimelineUITests.swift; sourceTree = "<group>"; };
 		9A44532C3ABB2F266887ED3C /* RecipeSchemaMigrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeSchemaMigrator.swift; sourceTree = "<group>"; };
 		AE1335BFB52C99A161C55AC4 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		B05261EA830099372BAEDB71 /* RecipeCookActivity.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = RecipeCookActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B05261EA830099372BAEDB71 /* RecipeCookActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RecipeCookActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		BC53FC69779A13583D36DED1 /* RecipeCookActivityBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeCookActivityBundle.swift; sourceTree = "<group>"; };
 		CABF88FCE8577C828C85610D /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		D306D0DA34B2D474325C347D /* RecipeEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeEditorView.swift; sourceTree = "<group>"; };
-		D4BC9730142766D1022538AB /* RecipeTimelineUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RecipeTimelineUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D4BC9730142766D1022538AB /* RecipeTimelineUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RecipeTimelineUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DB76BEBA1EB9F1AE71ACE481 /* RecipeTimelineApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeTimelineApp.swift; sourceTree = "<group>"; };
 		E26A8D447102BE5229367782 /* AppRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouter.swift; sourceTree = "<group>"; };
 		E89C9F0B39EEACF47F2017A2 /* AuthSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthSession.swift; sourceTree = "<group>"; };
@@ -896,7 +896,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 359794K46A;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -1008,7 +1008,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 359794K46A;
 				ENABLE_NS_ASSERTIONS = NO;
