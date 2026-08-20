@@ -70,7 +70,8 @@ final class RecipeTimelineUITests: XCTestCase {
 
         let detailEmptyState = app.staticTexts["Choose a recipe"]
         let compactEmptyState = app.staticTexts["Your cookbook is empty"]
-        let emptyStateAppeared = detailEmptyState.waitForExistence(timeout: 5)
+        let emptyStateAppeared =
+            detailEmptyState.waitForExistence(timeout: 5)
             || compactEmptyState.waitForExistence(timeout: 2)
         XCTAssertTrue(emptyStateAppeared)
         attachScreenshot(named: "library-empty-state")
@@ -88,6 +89,20 @@ final class RecipeTimelineUITests: XCTestCase {
         attachScreenshot(named: "recipe-detail-stages")
     }
 
+    func testRecipeExportOffersAllSupportedFormats() {
+        let app = launchSampleApp()
+        openSampleRecipe(in: app)
+
+        let export = app.buttons["export-recipe"]
+        XCTAssertTrue(export.waitForExistence(timeout: 3))
+        export.tap()
+
+        XCTAssertTrue(app.navigationBars["Export recipe"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["export-pdf"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["export-xlsx"].exists)
+        XCTAssertTrue(app.buttons["export-png"].exists)
+    }
+
     private func launchSampleApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing"]
@@ -103,10 +118,15 @@ final class RecipeTimelineUITests: XCTestCase {
     }
 
     private func openSampleRecipe(in app: XCUIApplication) {
-        let recipe = app.staticTexts["Espresso Brownies"]
-        XCTAssertTrue(recipe.waitForExistence(timeout: 5))
-        if !app.buttons["start-cooking"].exists { recipe.tap() }
-        XCTAssertTrue(app.buttons["start-cooking"].waitForExistence(timeout: 5))
+        let startCooking = app.buttons["start-cooking"]
+        if !startCooking.exists {
+            let recipe = app.buttons.matching(
+                NSPredicate(format: "label BEGINSWITH %@", "Espresso Brownies")
+            ).firstMatch
+            XCTAssertTrue(recipe.waitForExistence(timeout: 5))
+            recipe.tap()
+        }
+        XCTAssertTrue(startCooking.waitForExistence(timeout: 5))
     }
 
     private func attachScreenshot(named name: String) {

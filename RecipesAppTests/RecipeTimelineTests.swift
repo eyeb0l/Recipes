@@ -1,5 +1,7 @@
+import CoreGraphics
 import RecipeCore
 import SwiftData
+import UIKit
 import XCTest
 @testable import RecipeTimeline
 
@@ -60,5 +62,42 @@ final class RecipeTimelineTests: XCTestCase {
             geometry.inputMarkerOffsets(for: placement, directRows: directRows),
             [132, 224, 316]
         )
+    }
+
+    @MainActor
+    func testRecipeExporterCreatesValidPDFWorkbookAndPNGFiles() throws {
+        let request = RecipeExportRequest(
+            recipe: SampleRecipe.espressoBrownies,
+            servings: 18,
+            units: .imperial
+        )
+        let artifacts = try RecipeExporter.exportAll(request)
+        XCTAssertEqual(artifacts.map(\.format), [.pdf, .xlsx, .png])
+
+        let pdf = try Data(contentsOf: try XCTUnwrap(artifacts.first { $0.format == .pdf }).url)
+        XCTAssertTrue(pdf.starts(with: Data("%PDF".utf8)))
+        XCTAssertGreaterThan(pdf.count, 1_000)
+        let pdfProvider = try XCTUnwrap(CGDataProvider(data: pdf as CFData))
+        let pdfDocument = try XCTUnwrap(CGPDFDocument(pdfProvider))
+        let pdfPage = try XCTUnwrap(pdfDocument.page(at: 1))
+        let mediaBox = pdfPage.getBoxRect(.mediaBox)
+        XCTAssertGreaterThan(mediaBox.width, mediaBox.height)
+
+        let workbook = try Data(contentsOf: try XCTUnwrap(artifacts.first { $0.format == .xlsx }).url)
+        XCTAssertTrue(workbook.starts(with: Data([0x50, 0x4B, 0x03, 0x04])))
+        XCTAssertNotNil(workbook.range(of: Data("xl/workbook.xml".utf8)))
+        XCTAssertNotNil(workbook.range(of: Data("Timeline".utf8)))
+        XCTAssertNotNil(workbook.range(of: Data("Ingredients".utf8)))
+        XCTAssertNotNil(workbook.range(of: Data("Imperial".utf8)))
+        XCTAssertNotNil(workbook.range(of: Data("3 min".utf8)))
+        XCTAssertNotNil(workbook.range(of: Data("30–40 min".utf8)))
+        XCTAssertNil(workbook.range(of: Data(".formatted(".utf8)))
+
+        let png = try Data(contentsOf: try XCTUnwrap(artifacts.first { $0.format == .png }).url)
+        XCTAssertTrue(png.starts(with: Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])))
+        XCTAssertGreaterThan(png.count, 1_000)
+        let timelineImage = try XCTUnwrap(UIImage(data: png))
+        XCTAssertGreaterThan(timelineImage.size.width, timelineImage.size.height)
+        XCTAssertGreaterThan(timelineImage.size.width, 1_400)
     }
 }

@@ -8,10 +8,18 @@ struct RecipeDetailView: View {
         let updatedAt: Date
     }
 
-    private enum DetailSheet: String, Identifiable {
+    private enum DetailSheet: Identifiable {
         case editor
         case source
-        var id: String { rawValue }
+        case export(RecipeExportRequest)
+
+        var id: String {
+            switch self {
+            case .editor: "editor"
+            case .source: "source"
+            case .export: "export"
+            }
+        }
     }
 
     let record: RecipeRecord
@@ -55,13 +63,25 @@ struct RecipeDetailView: View {
                     startCookingBar(recipe)
                 }
             } else {
-                ContentUnavailableView("Recipe unavailable", systemImage: "exclamationmark.triangle", description: Text("The saved canonical recipe could not be decoded."))
+                ContentUnavailableView(
+                    "Recipe unavailable", systemImage: "exclamationmark.triangle", description: Text("The saved canonical recipe could not be decoded."))
             }
         }
         .background(RecipeTheme.paper)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
+                Button("Export", systemImage: "square.and.arrow.up") {
+                    guard let recipe else { return }
+                    presentedSheet = .export(
+                        .init(
+                            recipe: recipe,
+                            servings: Decimal(servings),
+                            units: units
+                        ))
+                }
+                .disabled(recipe == nil)
+                .accessibilityIdentifier("export-recipe")
                 Button("Source", systemImage: "doc.text.magnifyingglass") { presentedSheet = .source }
                 Button("Edit", systemImage: "slider.horizontal.3") { presentedSheet = .editor }
             }
@@ -77,6 +97,8 @@ struct RecipeDetailView: View {
                 }
             case .source:
                 RecipeSourceView(record: record)
+            case let .export(request):
+                RecipeExportView(request: request)
             }
         }
         .task(id: LoadIdentity(recordID: record.id, updatedAt: record.updatedAt)) {

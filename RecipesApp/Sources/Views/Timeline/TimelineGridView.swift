@@ -75,7 +75,8 @@ struct TimelineGridGeometry {
         columnOffsets = offsets
         columnLaneCounts = laneCounts
         contentWidth = max(runningX, metrics.minimumTimelineWidth)
-        contentHeight = metrics.headerHeight
+        contentHeight =
+            metrics.headerHeight
             + globalBandHeight
             + CGFloat(max(layout.rowCount, 1)) * metrics.rowHeight
     }
@@ -147,6 +148,7 @@ struct TimelineGridView: View {
     let units: UnitSystemPreference
     var cookPresentation: TimelineCookPresentation?
     var onMoveStage: ((String, String) -> Void)?
+    var showsFullContent = false
 
     @ScaledMetric(relativeTo: .body) private var ingredientWidth: CGFloat = 274
     @ScaledMetric(relativeTo: .body) private var rowHeight: CGFloat = 92
@@ -168,24 +170,45 @@ struct TimelineGridView: View {
                 cardInset: cardInset
             )
             let geometry = TimelineGridGeometry(layout: layout, metrics: metrics)
+            grid(layout: layout, geometry: geometry)
+        } else {
+            ContentUnavailableView(
+                "Timeline unavailable", systemImage: "exclamationmark.triangle", description: Text("Resolve invalid stage dependencies in the editor."))
+        }
+    }
+
+    @ViewBuilder
+    private func grid(layout: TimelineLayout, geometry: TimelineGridGeometry) -> some View {
+        if showsFullContent {
+            HStack(alignment: .top, spacing: 0) {
+                ingredientColumn(geometry: geometry)
+                timelineDivider(height: geometry.contentHeight)
+                timelineContent(layout: layout, geometry: geometry)
+            }
+            .padding(.trailing, geometry.metrics.trailingMargin)
+            .background(RecipeTheme.surface)
+            .overlay { Rectangle().stroke(RecipeTheme.grid.opacity(0.8), lineWidth: 1) }
+        } else {
             ScrollView(.vertical) {
                 HStack(alignment: .top, spacing: 0) {
                     ingredientColumn(geometry: geometry)
-                    Rectangle()
-                        .fill(RecipeTheme.grid)
-                        .frame(width: 1, height: geometry.contentHeight)
+                    timelineDivider(height: geometry.contentHeight)
                     ScrollView(.horizontal) {
                         timelineContent(layout: layout, geometry: geometry)
                     }
-                    .contentMargins(.trailing, metrics.trailingMargin, for: .scrollContent)
+                    .contentMargins(.trailing, geometry.metrics.trailingMargin, for: .scrollContent)
                     .scrollIndicators(.visible)
                 }
             }
             .background(RecipeTheme.surface)
             .overlay { Rectangle().stroke(RecipeTheme.grid.opacity(0.8), lineWidth: 1) }
-        } else {
-            ContentUnavailableView("Timeline unavailable", systemImage: "exclamationmark.triangle", description: Text("Resolve invalid stage dependencies in the editor."))
         }
+    }
+
+    private func timelineDivider(height: CGFloat) -> some View {
+        Rectangle()
+            .fill(RecipeTheme.grid)
+            .frame(width: 1, height: height)
     }
 
     private func ingredientColumn(geometry: TimelineGridGeometry) -> some View {
@@ -207,11 +230,13 @@ struct TimelineGridView: View {
                 .overlay(alignment: .bottom) { Rectangle().fill(RecipeTheme.grid).frame(height: 1) }
             ForEach(recipe.sortedIngredients) { ingredient in
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(ingredient.displayQuantity(
-                        servings: servings,
-                        originalServings: recipe.recipeYield.servings,
-                        units: units
-                    ) ?? "—")
+                    Text(
+                        ingredient.displayQuantity(
+                            servings: servings,
+                            originalServings: recipe.recipeYield.servings,
+                            units: units
+                        ) ?? "—"
+                    )
                     .font(.body.monospacedDigit().weight(.semibold))
                     .frame(width: quantityWidth, alignment: .trailing)
                     Text(ingredient.name)
@@ -282,6 +307,7 @@ struct TimelineGridView: View {
                     let directRows = Array(Set(stage.ingredientUses.compactMap { rowByIngredient[$0.ingredientID] })).sorted()
                     TimelineStageCard(
                         stage: stage,
+                        units: units,
                         warning: warningStageIDs.contains(stage.id),
                         isFocused: cookPresentation?.focusedStageID == stage.id,
                         isReady: cookPresentation?.readyStageIDs.contains(stage.id) == true,
@@ -313,6 +339,7 @@ struct TimelineGridView: View {
 
 private struct TimelineStageCard: View {
     let stage: Stage
+    let units: UnitSystemPreference
     let warning: Bool
     let isFocused: Bool
     let isReady: Bool
@@ -405,7 +432,7 @@ private struct TimelineStageCard: View {
     }
 
     private var stageDetail: String? {
-        if let temperature = stage.temperature { return temperature.displayString() }
+        if let temperature = stage.temperature { return temperature.converted(for: units).displayString() }
         return stage.heat.map { "\($0.capitalized) heat" } ?? stage.completionCue
     }
 

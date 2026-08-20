@@ -9,11 +9,12 @@ This repository contains the first vertical slice:
 - Provider-neutral RecipeV1 JSON Schema with uncertainties instead of invented facts.
 - Deterministic graph validation and timeline layout in the shared `RecipeCore` framework.
 - Serving scaling, kitchen fractions, compatible metric/imperial conversion, and qualitative quantities.
+- Per-recipe PDF, XLSX, and PNG export using the selected serving count and unit system.
 - Prep checklist, structured editing, iPad drag/drop, and iPhone list reordering.
 - Recoverable cook sessions, dependency-ready focus, concurrent timers, notifications, display-awake lifecycle, Live Activity, and App Intent controls.
 - A privacy-preserving Cloudflare Worker with Sign in with Apple authentication, quotas, URL safety controls, layered page extraction, and Grok/OpenAI adapters.
 
-Substitutions, Reminders shopping lists, and PNG/PDF/XLSX export are intentionally left for the next slice.
+Substitutions and Reminders shopping lists are intentionally left for the next slice.
 
 ## Repository map
 
