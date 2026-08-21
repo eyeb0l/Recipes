@@ -6,6 +6,22 @@ import XCTest
 @testable import RecipeTimeline
 
 final class RecipeTimelineTests: XCTestCase {
+    func testSessionTokensRoundTripThroughPersistentStorageCodec() throws {
+        let expected = SessionTokens(
+            accessToken: "access-token",
+            refreshToken: "refresh-token",
+            accessExpiresAt: Date(timeIntervalSince1970: 1_787_310_900),
+            refreshExpiresAt: Date(timeIntervalSince1970: 1_789_902_900)
+        )
+
+        let restored = try SessionTokens.decodeStored(expected.encodedForStorage())
+
+        XCTAssertEqual(restored.accessToken, expected.accessToken)
+        XCTAssertEqual(restored.refreshToken, expected.refreshToken)
+        XCTAssertEqual(restored.accessExpiresAt, expected.accessExpiresAt)
+        XCTAssertEqual(restored.refreshExpiresAt, expected.refreshExpiresAt)
+    }
+
     func testRecipeRecordStoresSearchMetadataAndCanonicalJSON() throws {
         let source = SampleRecipe.espressoBrownies
         let record = try RecipeRecord(recipe: source, date: Date(timeIntervalSince1970: 100))

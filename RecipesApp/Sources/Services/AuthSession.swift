@@ -7,6 +7,14 @@ struct SessionTokens: Codable, Sendable {
     let refreshToken: String
     let accessExpiresAt: Date
     let refreshExpiresAt: Date
+
+    static func decodeStored(_ data: Data) throws -> Self {
+        try JSONDecoder.iso8601.decode(Self.self, from: data)
+    }
+
+    func encodedForStorage() throws -> Data {
+        try JSONEncoder.iso8601.encode(self)
+    }
 }
 
 private struct AppleSessionRequest: Encodable {
@@ -34,7 +42,7 @@ final class AuthSession {
 
     init() {
         if let data = try? KeychainStore.load(account: Self.keychainAccount),
-           let decoded = try? JSONDecoder().decode(SessionTokens.self, from: data),
+           let decoded = try? SessionTokens.decodeStored(data),
            decoded.refreshExpiresAt > Date() {
             tokens = decoded
             state = .signedIn
@@ -94,7 +102,7 @@ final class AuthSession {
     }
 
     private func persist(_ newTokens: SessionTokens) throws {
-        let data = try JSONEncoder.iso8601.encode(newTokens)
+        let data = try newTokens.encodedForStorage()
         try KeychainStore.save(data, account: Self.keychainAccount)
         tokens = newTokens
     }
