@@ -30,12 +30,13 @@ describe("provider adapters", () => {
     expect(result.provider).toBe("grok");
   });
 
-  it("uses Responses structured output and disables storage for OpenAI", async () => {
+  it("uses low reasoning, Responses structured output, and disables storage for OpenAI", async () => {
     const fetcher = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ output: [{ content: [{ type: "output_text", text: JSON.stringify(validRecipe()) }] }] }), { status: 200 }));
     const result = await new OpenAIExtractor("gpt-5.6-luna", "sk-test", fetcher as typeof fetch).extract(source, "request-2");
     const body = JSON.parse(fetcher.mock.calls[0]![1]!.body as string);
     expect(body.model).toBe("gpt-5.6-luna");
     expect(body.store).toBe(false);
+    expect(body.reasoning.effort).toBe("low");
     expect(body.text.format.strict).toBe(true);
     expect(result.provider).toBe("openai");
   });

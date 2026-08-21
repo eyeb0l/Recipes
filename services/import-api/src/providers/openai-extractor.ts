@@ -35,6 +35,7 @@ export class OpenAIExtractor implements RecipeExtractor {
       body: JSON.stringify({
         model: this.model,
         store: false,
+        reasoning: { effort: "low" },
         input: [{ role: "user", content }],
         text: { format: { type: "json_schema", name: "recipe_v1", strict: true, schema: providerSchema() } },
         max_output_tokens: 12_000
