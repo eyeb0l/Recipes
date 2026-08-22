@@ -152,9 +152,13 @@ struct ImportRecipeView: View {
             Section("Cookbook pages") {
                 HStack {
                     Button("Scan pages", systemImage: "doc.viewfinder") { captureSheet = .scanner }
+                        .buttonStyle(.borderless)
+                        .accessibilityIdentifier("scan-pages")
                     PhotosPicker(selection: $photoItems, maxSelectionCount: 4, matching: .images) {
                         Label("Choose photos", systemImage: "photo.on.rectangle")
                     }
+                    .buttonStyle(.borderless)
+                    .accessibilityIdentifier("choose-photos")
                 }
                 if capturedImages.isEmpty {
                     Text("Scan or choose up to four pages. Photos are normalized on device and discarded after extraction.")

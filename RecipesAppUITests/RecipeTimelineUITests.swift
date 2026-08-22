@@ -103,6 +103,25 @@ final class RecipeTimelineUITests: XCTestCase {
         XCTAssertTrue(app.buttons["export-png"].exists)
     }
 
+    func testChoosePhotosOpensPhotoPickerInsteadOfDocumentScanner() {
+        let app = launchSampleApp()
+
+        let importRecipe = app.buttons["import-recipe"]
+        XCTAssertTrue(importRecipe.waitForExistence(timeout: 5))
+        importRecipe.tap()
+
+        XCTAssertTrue(app.navigationBars["Import recipe"].waitForExistence(timeout: 5))
+        app.buttons["Scan pages"].tap()
+
+        let choosePhotos = app.buttons["choose-photos"]
+        XCTAssertTrue(choosePhotos.waitForExistence(timeout: 3))
+        choosePhotos.tap()
+
+        XCTAssertFalse(app.staticTexts["Position the document in view."].waitForExistence(timeout: 2))
+        XCTAssertFalse(choosePhotos.isHittable)
+        XCTAssertTrue(app.staticTexts["Select Photos"].waitForExistence(timeout: 5))
+    }
+
     private func launchSampleApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing"]
