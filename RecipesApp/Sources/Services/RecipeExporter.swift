@@ -33,6 +33,16 @@ struct RecipeExportRequest: Hashable, Sendable {
     let recipe: RecipeV1
     let servings: Decimal
     let units: UnitSystemPreference
+
+    init(recipe: RecipeV1, servings: Decimal, units: UnitSystemPreference) {
+        let baseServings = recipe.recipeYield.resolvedServings
+        var normalizedRecipe = recipe
+        normalizedRecipe.recipeYield.servings = baseServings
+
+        self.recipe = normalizedRecipe
+        self.servings = servings >= 1 ? servings : baseServings
+        self.units = units
+    }
 }
 
 struct RecipeExportArtifact: Identifiable, Sendable {

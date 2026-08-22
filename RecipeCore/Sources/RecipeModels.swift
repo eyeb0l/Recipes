@@ -62,6 +62,32 @@ public struct RecipeYield: Codable, Hashable, Sendable {
         self.servings = servings
         self.label = label
     }
+
+    /// Returns a usable serving count for scaling and display.
+    ///
+    /// Earlier provider output could contain a unit-scaled value such as
+    /// `0.004` while retaining the source label `"4 servings"`. A serving
+    /// count below one cannot be represented by the app's serving controls,
+    /// so recover a single, unambiguous count from the source label. If the
+    /// label is absent or ambiguous, one serving is the safe neutral base.
+    public var resolvedServings: Decimal {
+        guard servings < 1 else { return servings }
+        guard let label, let labelServings = Self.unambiguousServingCount(in: label) else { return 1 }
+        return labelServings
+    }
+
+    private static func unambiguousServingCount(in label: String) -> Decimal? {
+        let tokens = label.split { character in
+            !character.isNumber && character != "." && character != ","
+        }
+        let candidates = tokens.compactMap { token -> Decimal? in
+            Decimal(string: token.replacingOccurrences(of: ",", with: "."), locale: Locale(identifier: "en_US_POSIX"))
+        }
+        guard candidates.count == 1, let candidate = candidates.first, candidate >= 1, candidate <= 100 else {
+            return nil
+        }
+        return candidate
+    }
 }
 
 public enum QuantityKind: String, Codable, CaseIterable, Sendable {

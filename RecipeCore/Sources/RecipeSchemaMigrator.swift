@@ -28,7 +28,9 @@ public enum RecipeSchemaMigrator {
             throw RecipeSchemaMigrationError.unsupportedVersion(version)
         }
         let migrated = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
-        return try RecipeCoding.decoder.decode(RecipeV1.self, from: migrated)
+        var recipe = try RecipeCoding.decoder.decode(RecipeV1.self, from: migrated)
+        recipe.recipeYield.servings = recipe.recipeYield.resolvedServings
+        return recipe
     }
 
     private static func migratePreviewV0(_ input: [String: Any]) -> [String: Any] {

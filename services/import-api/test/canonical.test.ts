@@ -7,6 +7,12 @@ describe("canonical recipe validation", () => {
     expect(() => validateCanonicalRecipe(validRecipe())).not.toThrow();
   });
 
+  it("rejects sub-unit serving counts", () => {
+    const recipe = validRecipe();
+    recipe.yield.servings = 0.004;
+    expect(() => validateCanonicalRecipe(recipe)).toThrow(/RecipeV1/u);
+  });
+
   it("enforces required fields and rejects additional properties", () => {
     const missing = validRecipe();
     delete missing.stages[0].instruction;

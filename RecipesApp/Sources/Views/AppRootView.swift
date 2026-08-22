@@ -36,7 +36,14 @@ struct AppRootView: View {
                   !arguments.contains("--ui-testing-empty-library"),
                   records.isEmpty
             else { return }
-            try? modelContext.insert(RecipeRecord(recipe: SampleRecipe.espressoBrownies))
+            var sample = SampleRecipe.espressoBrownies
+            if arguments.contains("--ui-testing-malformed-yield") {
+                sample.recipeYield = RecipeYield(
+                    servings: Decimal(string: "0.009")!,
+                    label: "9 squares"
+                )
+            }
+            try? modelContext.insert(RecipeRecord(recipe: sample))
             try? modelContext.save()
         }
     }

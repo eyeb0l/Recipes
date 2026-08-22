@@ -94,6 +94,22 @@ final class RecipeTimelineUITests: XCTestCase {
         attachScreenshot(named: "recipe-detail-stages")
     }
 
+    func testMalformedImportedYieldRecoversBeforeServingAdjustment() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--ui-testing-malformed-yield"]
+        app.launch()
+        openSampleRecipe(in: app)
+
+        let increment = app.buttons["servings-control-Increment"]
+        XCTAssertTrue(increment.waitForExistence(timeout: 3))
+        XCTAssertEqual(increment.value as? String, "9")
+        XCTAssertTrue(increment.isHittable)
+        increment.tap()
+        XCTAssertEqual(increment.value as? String, "10")
+        XCTAssertTrue(app.staticTexts["127.78 g"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["127.78 kg"].exists)
+    }
+
     func testRecipeExportOffersAllSupportedFormats() {
         let app = launchSampleApp()
         openSampleRecipe(in: app)

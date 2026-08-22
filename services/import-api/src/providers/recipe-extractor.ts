@@ -51,6 +51,7 @@ Rules:
 - Every listed ingredient must be allocated to a stage or covered by an uncertainty.
 - Use stable short string IDs and a directed acyclic stage graph.
 - Quantities must remain decimal numbers or source text; never guess density-based mass/volume conversions.
+- yield.servings is a count of portions, must be at least 1, and must never be converted as a mass or volume.
 - Set provenance.sourceType to ${source.sourceType}, provenance.url to ${source.sourceURL ?? "null"}, and schemaVersion to 1.
 - The user's locale is ${source.locale}; their display-unit preference is ${source.preferredUnitSystem}, but preserve source quantities.
 

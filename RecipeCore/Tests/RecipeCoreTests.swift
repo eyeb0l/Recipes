@@ -180,6 +180,41 @@ final class RecipeCoreTests: XCTestCase {
         XCTAssertEqual(CookingTemperature(value: 180, unit: .celsius).converted(for: .imperial).value, 356)
     }
 
+    func testInvalidSubOneServingYieldResolvesFromUnambiguousSourceLabel() throws {
+        let malformed = RecipeYield(servings: Decimal(string: "0.004")!, label: "4 servings")
+        XCTAssertEqual(malformed.resolvedServings, 4)
+
+        let ingredient = Ingredient(
+            name: "Italian sausage",
+            quantity: .exact(1, unit: .pound),
+            sortIndex: 0
+        )
+        XCTAssertEqual(
+            ingredient.displayQuantity(
+                servings: malformed.resolvedServings,
+                originalServings: malformed.resolvedServings,
+                units: .metric
+            ),
+            "453.59 g"
+        )
+
+        var recipe = SampleRecipe.espressoBrownies
+        recipe.recipeYield = malformed
+        let validation = RecipeValidator.validate(recipe)
+        XCTAssertFalse(validation.isValid)
+        XCTAssertTrue(validation.issues.contains { $0.code == "yield.servings" })
+
+        let repaired = try RecipeSchemaMigrator.decodeAndMigrate(RecipeCoding.encoder.encode(recipe))
+        XCTAssertEqual(repaired.recipeYield.servings, 4)
+        XCTAssertTrue(RecipeValidator.validate(repaired).isValid)
+    }
+
+    func testInvalidServingYieldFallsBackSafelyWhenSourceLabelIsAmbiguous() {
+        XCTAssertEqual(RecipeYield(servings: 0, label: nil).resolvedServings, 1)
+        XCTAssertEqual(RecipeYield(servings: Decimal(string: "0.004")!, label: "Serves 4–6").resolvedServings, 1)
+        XCTAssertEqual(RecipeYield(servings: Decimal(string: "2.5")!, label: "2.5 servings").resolvedServings, Decimal(string: "2.5")!)
+    }
+
     func testCookSessionSupportsParallelReadinessAndTimerRecovery() async throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("CookSession-\(UUID().uuidString).json")
         let store = CookSessionStore(fileURL: url)

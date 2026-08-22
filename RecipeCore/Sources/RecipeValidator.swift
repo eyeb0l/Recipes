@@ -38,8 +38,8 @@ public enum RecipeValidator {
         if recipe.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             issues.append(.init(severity: .error, code: "recipe.title", path: "title", message: "Recipe title is required."))
         }
-        if recipe.recipeYield.servings <= 0 {
-            issues.append(.init(severity: .error, code: "yield.servings", path: "yield.servings", message: "Servings must be greater than zero."))
+        if recipe.recipeYield.servings < 1 {
+            issues.append(.init(severity: .error, code: "yield.servings", path: "yield.servings", message: "Servings must be at least one."))
         }
 
         let ingredientIDs = Set(recipe.ingredients.map(\.id))

@@ -121,4 +121,43 @@ final class RecipeTimelineTests: XCTestCase {
         XCTAssertGreaterThan(timelineImage.size.width, timelineImage.size.height)
         XCTAssertGreaterThan(timelineImage.size.width, 1_400)
     }
+
+    @MainActor
+    func testRecipeExporterRepairsMalformedImportedYieldBeforeScaling() throws {
+        var recipe = SampleRecipe.espressoBrownies
+        recipe.recipeYield = RecipeYield(servings: Decimal(string: "0.004")!, label: "4 servings")
+
+        let baseRequest = RecipeExportRequest(
+            recipe: recipe,
+            servings: Decimal(string: "0.004")!,
+            units: .metric
+        )
+        XCTAssertEqual(baseRequest.recipe.recipeYield.servings, 4)
+        XCTAssertEqual(baseRequest.servings, 4)
+
+        let artifacts = try RecipeExporter.exportAll(baseRequest)
+        let workbook = try Data(contentsOf: try XCTUnwrap(artifacts.first { $0.format == .xlsx }).url)
+        XCTAssertNotNil(workbook.range(of: Data("SERVES 4".utf8)))
+        XCTAssertNil(workbook.range(of: Data("0.004".utf8)))
+        XCTAssertNotNil(workbook.range(of: Data("115 g".utf8)))
+        XCTAssertNil(workbook.range(of: Data("115 kg".utf8)))
+    }
+
+    func testRecipeExportRequestPreservesValidSelectedServingsAgainstRepairedBase() {
+        var recipe = SampleRecipe.espressoBrownies
+        recipe.recipeYield = RecipeYield(servings: Decimal(string: "0.004")!, label: "4 servings")
+
+        let request = RecipeExportRequest(recipe: recipe, servings: 2, units: .metric)
+
+        XCTAssertEqual(request.recipe.recipeYield.servings, 4)
+        XCTAssertEqual(request.servings, 2)
+        XCTAssertEqual(
+            request.recipe.sortedIngredients.first?.displayQuantity(
+                servings: request.servings,
+                originalServings: request.recipe.recipeYield.servings,
+                units: request.units
+            ),
+            "57½ g"
+        )
+    }
 }

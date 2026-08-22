@@ -43,14 +43,14 @@ struct RecipeDetailView: View {
                         if horizontalSizeClass == .compact || dynamicTypeSize.isAccessibilitySize {
                             FocusedStepList(
                                 recipe: recipe,
-                                servings: Decimal(servings),
+                                servings: selectedServings,
                                 units: units
                             )
                             .padding(.horizontal)
                         } else {
                             TimelineGridView(
                                 recipe: recipe,
-                                servings: Decimal(servings),
+                                servings: selectedServings,
                                 units: units
                             )
                             .frame(minHeight: 520)
@@ -76,7 +76,7 @@ struct RecipeDetailView: View {
                     presentedSheet = .export(
                         .init(
                             recipe: recipe,
-                            servings: Decimal(servings),
+                            servings: selectedServings,
                             units: units
                         ))
                 }
@@ -92,8 +92,10 @@ struct RecipeDetailView: View {
             switch sheet {
             case .editor:
                 RecipeEditorView(record: record) { updated in
-                    recipe = updated
-                    servings = NSDecimalNumber(decimal: updated.recipeYield.servings).doubleValue
+                    var resolved = updated
+                    resolved.recipeYield.servings = updated.recipeYield.resolvedServings
+                    recipe = resolved
+                    servings = NSDecimalNumber(decimal: resolved.recipeYield.servings).doubleValue
                 }
             case .source:
                 RecipeSourceView(record: record)
@@ -106,9 +108,13 @@ struct RecipeDetailView: View {
             servings = 1
             recipe = try? record.recipe()
             if let recipe {
-                servings = NSDecimalNumber(decimal: recipe.recipeYield.servings).doubleValue
+                servings = NSDecimalNumber(decimal: recipe.recipeYield.resolvedServings).doubleValue
             }
         }
+    }
+
+    private var selectedServings: Decimal {
+        NSDecimalNumber(value: servings).decimalValue
     }
 
     private func recipeHeader(_ recipe: RecipeV1) -> some View {
@@ -147,6 +153,7 @@ struct RecipeDetailView: View {
             LabeledContent("Servings", value: servings.formatted(.number.precision(.fractionLength(0...1))))
                 .frame(minWidth: 145)
         }
+        .accessibilityIdentifier("servings-control")
     }
 
     private var unitsControl: some View {
@@ -216,29 +223,16 @@ struct RecipeDetailView: View {
                     cookErrorMessage
                     startCookingButton(recipe, fillsWidth: false)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(RecipeTheme.grid.opacity(0.45), lineWidth: 0.5)
-                }
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+                .padding(.bottom, 10)
             } else {
                 VStack(alignment: .trailing, spacing: 6) {
                     cookErrorMessage
                     startCookingButton(recipe, fillsWidth: false)
                 }
-                .padding(10)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(RecipeTheme.grid.opacity(0.45), lineWidth: 0.5)
-                }
                 .padding(.trailing, 16)
-                .padding(.bottom, 10)
+                .padding(.bottom, 12)
             }
         }
     }
@@ -263,7 +257,9 @@ struct RecipeDetailView: View {
                 .frame(maxWidth: fillsWidth ? .infinity : nil)
         }
         .buttonStyle(.borderedProminent)
+        .tint(RecipeTheme.focus)
         .controlSize(.large)
+        .shadow(color: RecipeTheme.ink.opacity(0.12), radius: 8, y: 3)
         .accessibilityIdentifier("start-cooking")
     }
 

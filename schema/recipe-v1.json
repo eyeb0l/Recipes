@@ -52,7 +52,7 @@
       "additionalProperties": false,
       "required": ["servings", "label"],
       "properties": {
-        "servings": { "type": "number", "exclusiveMinimum": 0 },
+        "servings": { "type": "number", "minimum": 1 },
         "label": { "type": ["string", "null"] }
       }
     },
