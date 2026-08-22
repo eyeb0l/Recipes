@@ -17,7 +17,7 @@ struct FocusedStepList: View {
     }
 
     var body: some View {
-        LazyVStack(alignment: .leading, spacing: 16) {
+        LazyVStack(alignment: .leading, spacing: 12) {
             ForEach(recipe.sortedStages) { stage in
                 stageCard(stage)
             }
@@ -28,7 +28,7 @@ struct FocusedStepList: View {
         let warnings = warnings(for: stage)
         let ingredients = enteringIngredients(for: stage)
 
-        return VStack(alignment: .leading, spacing: 14) {
+        return VStack(alignment: .leading, spacing: 11) {
             stageHeader(stage, warnings: warnings)
 
             Text(stage.instruction)
@@ -54,7 +54,8 @@ struct FocusedStepList: View {
 
             stageMetadata(stage)
         }
-        .padding(18)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 15)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RecipeTheme.surface, in: RoundedRectangle(cornerRadius: 14))
         .overlay {
@@ -75,9 +76,7 @@ struct FocusedStepList: View {
                     warningLabel(count: warnings.count)
                 }
             }
-            .fixedSize(horizontal: true, vertical: false)
-
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 stageTitle(stage)
                 if !warnings.isEmpty {
                     warningLabel(count: warnings.count)
@@ -95,6 +94,7 @@ struct FocusedStepList: View {
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(RecipeTheme.ink)
                 .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
         }
     }
 
@@ -105,7 +105,7 @@ struct FocusedStepList: View {
     }
 
     private func enteringIngredientsSection(_ ingredients: [EnteringIngredient]) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: 7) {
             Label("Add now", systemImage: "arrow.right.circle.fill")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(RecipeTheme.focusText)
@@ -129,7 +129,7 @@ struct FocusedStepList: View {
                 .foregroundStyle(RecipeTheme.ink)
             }
         }
-        .padding(.vertical, 11)
+        .padding(.vertical, 9)
         .padding(.horizontal, 13)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RecipeTheme.focus.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
@@ -166,7 +166,7 @@ struct FocusedStepList: View {
             }
             .font(.subheadline)
             .foregroundStyle(RecipeTheme.secondaryInk)
-            .frame(minHeight: 44, alignment: .leading)
+            .frame(minHeight: 34, alignment: .leading)
         }
     }
 

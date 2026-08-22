@@ -348,7 +348,7 @@ private struct TimelineStageCard: View {
     let inputMarkerOffsets: [CGFloat]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .top) {
                 Text(stage.action)
                     .font(.title3.weight(.semibold))
@@ -361,29 +361,23 @@ private struct TimelineStageCard: View {
                 }
             }
             if stageDetail != nil || stage.duration != nil {
-                HStack(alignment: .center, spacing: 8) {
-                    if let detail = stageDetail {
-                        Text(detail)
-                            .font(.subheadline)
-                            .foregroundStyle(RecipeTheme.secondaryInk)
-                            .lineLimit(stage.duration == nil ? 3 : 2)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .center, spacing: 8) {
+                        stageDetailText(lineLimit: 2)
+                        if stageDetail != nil, stage.duration != nil {
+                            Spacer(minLength: 2)
+                        }
+                        durationBadge
                     }
-                    if stageDetail != nil, stage.duration != nil {
-                        Spacer(minLength: 2)
-                    }
-                    if let duration = stage.duration {
-                        Label(durationLabel(duration), systemImage: "timer")
-                            .font(.footnote.monospacedDigit().weight(.medium))
-                            .foregroundStyle(isFocused ? RecipeTheme.ink : RecipeTheme.secondaryInk)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 4)
-                            .background(RecipeTheme.surface.opacity(0.68), in: Capsule())
-                            .fixedSize()
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        stageDetailText(lineLimit: 3)
+                        durationBadge
                     }
                 }
             }
         }
-        .padding(12)
+        .padding(11)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(background, in: RoundedRectangle(cornerRadius: 10))
         .overlay {
@@ -434,6 +428,30 @@ private struct TimelineStageCard: View {
     private var stageDetail: String? {
         if let temperature = stage.temperature { return temperature.converted(for: units).displayString() }
         return stage.heat.map { "\($0.capitalized) heat" } ?? stage.completionCue
+    }
+
+    @ViewBuilder
+    private func stageDetailText(lineLimit: Int) -> some View {
+        if let stageDetail {
+            Text(stageDetail)
+                .font(.subheadline)
+                .foregroundStyle(RecipeTheme.secondaryInk)
+                .lineLimit(lineLimit)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @ViewBuilder
+    private var durationBadge: some View {
+        if let duration = stage.duration {
+            Label(durationLabel(duration), systemImage: "timer")
+                .font(.footnote.monospacedDigit().weight(.medium))
+                .foregroundStyle(isFocused ? RecipeTheme.ink : RecipeTheme.secondaryInk)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 4)
+                .background(RecipeTheme.surface.opacity(0.68), in: Capsule())
+                .fixedSize()
+        }
     }
 
     private func durationLabel(_ duration: StageDuration) -> String {

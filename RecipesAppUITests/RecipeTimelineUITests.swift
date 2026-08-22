@@ -80,6 +80,11 @@ final class RecipeTimelineUITests: XCTestCase {
     func testRecipeDetailSnapshots() {
         let app = launchSampleApp()
         openSampleRecipe(in: app)
+
+        let startCooking = app.buttons["start-cooking"]
+        let window = app.windows.firstMatch
+        XCTAssertGreaterThanOrEqual(startCooking.frame.height, 44)
+        XCTAssertLessThan(startCooking.frame.width, window.frame.width * 0.75)
         attachScreenshot(named: "recipe-detail-top")
 
         let scrollView = app.scrollViews.firstMatch

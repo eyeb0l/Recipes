@@ -166,10 +166,11 @@ struct RecipeDetailView: View {
                 Text("Prep checklist")
                     .font(.title2.weight(.semibold))
                 ForEach(recipe.prepTasks.sorted { $0.sortIndex < $1.sortIndex }) { task in
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text("•")
-                            .fontWeight(.bold)
-                            .foregroundStyle(RecipeTheme.secondaryInk)
+                    HStack(alignment: .top, spacing: 10) {
+                        Circle()
+                            .stroke(RecipeTheme.secondaryInk, lineWidth: 1.5)
+                            .frame(width: 18, height: 18)
+                            .padding(.top, 2)
                             .accessibilityHidden(true)
                         Text(task.instruction)
                         if task.isOptional {
@@ -213,12 +214,18 @@ struct RecipeDetailView: View {
             if horizontalSizeClass == .compact {
                 VStack(spacing: 6) {
                     cookErrorMessage
-                    startCookingButton(recipe, fillsWidth: true)
+                    startCookingButton(recipe, fillsWidth: false)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal)
-                .padding(.vertical, 12)
-                .background(.ultraThinMaterial)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(RecipeTheme.grid.opacity(0.45), lineWidth: 0.5)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
             } else {
                 VStack(alignment: .trailing, spacing: 6) {
                     cookErrorMessage
