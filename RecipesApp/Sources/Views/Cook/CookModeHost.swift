@@ -24,12 +24,12 @@ struct CookModeHost: View {
                     )
                 } else if let errorMessage {
                     ContentUnavailableView(
-                        "Cook session unavailable",
+                        "Can't open cook mode",
                         systemImage: "exclamationmark.triangle",
                         description: Text(errorMessage)
                     )
                 } else {
-                    ProgressView("Restoring cook session…")
+                    ProgressView("Opening cook mode…")
                 }
             }
             .toolbar {

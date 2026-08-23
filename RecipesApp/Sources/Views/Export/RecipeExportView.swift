@@ -11,7 +11,7 @@ struct RecipeExportView: View {
         NavigationStack {
             Group {
                 if isGenerating {
-                    ProgressView("Preparing exports…")
+                    ProgressView("Preparing files…")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let errorMessage {
                     ContentUnavailableView {
@@ -67,7 +67,7 @@ struct RecipeExportView: View {
                 Text(request.recipe.title)
             } footer: {
                 Text(
-                    "Exports use the selected serving count and unit system. Use the share sheet to save a copy to Files, AirDrop it, print it, or send it to another app."
+                    "Each file uses the servings and units shown on the recipe. Choose a format, then save, print, or send it from the share sheet."
                 )
             }
         }
@@ -78,11 +78,11 @@ struct RecipeExportView: View {
     private func exportDescription(for format: RecipeExportFormat) -> String {
         switch format {
         case .pdf:
-            "A print-ready cooking timeline"
+            "A PDF of your cooking timeline"
         case .xlsx:
-            "Timeline grid with recipe detail sheets"
+            "A spreadsheet with the timeline and recipe details"
         case .png:
-            "A high-resolution timeline image"
+            "A PNG image of your cooking timeline"
         }
     }
 

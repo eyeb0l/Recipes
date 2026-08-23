@@ -104,7 +104,7 @@ private struct RecipeLibraryList: View {
                 ContentUnavailableView {
                     Label("Your cookbook is empty", systemImage: "book.closed")
                 } description: {
-                    Text("Import a URL, paste a recipe, scan a cookbook page, or add the bundled sample.")
+                    Text("Import from a link, paste a recipe, scan a cookbook page, or try the sample recipe.")
                 } actions: {
                     Button("Import recipe") { router.presentedSheet = .importRecipe }
                         .buttonStyle(.borderedProminent)
@@ -221,7 +221,7 @@ private struct EmptyLibraryDetail: View {
                             .font(.largeTitle.weight(.semibold))
                             .accessibilityAddTraits(.isHeader)
                             .accessibilitySortPriority(3)
-                        Text("The landscape timeline keeps ingredients on the left and cooking stages moving across the page.")
+                        Text("Select a recipe to see its ingredients and cooking stages side by side.")
                             .font(.title3)
                             .foregroundStyle(RecipeTheme.secondaryInk)
                             .multilineTextAlignment(.center)

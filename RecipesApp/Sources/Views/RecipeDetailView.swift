@@ -64,7 +64,7 @@ struct RecipeDetailView: View {
                 }
             } else {
                 ContentUnavailableView(
-                    "Recipe unavailable", systemImage: "exclamationmark.triangle", description: Text("The saved canonical recipe could not be decoded."))
+                    "Recipe unavailable", systemImage: "exclamationmark.triangle", description: Text("This saved recipe can't be opened."))
             }
         }
         .background(RecipeTheme.paper)
@@ -158,7 +158,7 @@ struct RecipeDetailView: View {
 
     private var unitsControl: some View {
         Picker("Units", selection: $units) {
-            Text("Source").tag(UnitSystemPreference.source)
+            Text("As written").tag(UnitSystemPreference.source)
             Text("Metric").tag(UnitSystemPreference.metric)
             Text("Imperial").tag(UnitSystemPreference.imperial)
         }
@@ -207,7 +207,7 @@ struct RecipeDetailView: View {
                 }
                 .padding(.top, 8)
             } label: {
-                Label("\(unresolved.count) source uncertaint\(unresolved.count == 1 ? "y" : "ies")", systemImage: "exclamationmark.triangle.fill")
+                Label("\(unresolved.count) source warning\(unresolved.count == 1 ? "" : "s")", systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(RecipeTheme.warning)
             }
             .padding()
@@ -291,7 +291,7 @@ private struct RecipeSourceView: View {
                         Text(record.sourceTitle).font(.headline)
                     }
                     if record.sourceCleanedText.isEmpty {
-                        ContentUnavailableView("No source text retained", systemImage: "doc.text")
+                        ContentUnavailableView("No source text saved", systemImage: "doc.text")
                     } else {
                         Text(record.sourceCleanedText)
                             .font(.body)
