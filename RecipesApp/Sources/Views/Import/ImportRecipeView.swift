@@ -44,21 +44,21 @@ struct ImportRecipeView: View {
 
                 sourceSection
 
-                Section("Display preference") {
+                Section("Units") {
                     Picker("Units", selection: $preferredUnits) {
                         Text("As written").tag(UnitSystemPreference.source)
                         Text("Metric").tag(UnitSystemPreference.metric)
                         Text("Imperial").tag(UnitSystemPreference.imperial)
                     }
                     .pickerStyle(.segmented)
-                    Text("The source quantities remain canonical. You can switch units or serving size at any time.")
+                    Text("The app keeps the original amounts. You can change display units or servings later.")
                         .font(.footnote)
                         .foregroundStyle(RecipeTheme.secondaryInk)
                 }
 
                 if !auth.isAuthenticated {
                     Section("Sign in to import") {
-                        Text("Sign in with Apple authenticates the private import proxy. Your recipes remain in your iCloud library.")
+                        Text("Sign in with Apple to import recipes. The app saves them to your recipe library.")
                             .font(.footnote)
                         SignInWithAppleButton(.continue) { _ in
                         } onCompletion: { result in
@@ -94,9 +94,9 @@ struct ImportRecipeView: View {
                         RecipeTheme.paper.opacity(0.86).ignoresSafeArea()
                         VStack(spacing: 14) {
                             ProgressView()
-                            Text("Reading the recipe…")
+                            Text("Reading your recipe…")
                                 .font(.headline)
-                            Text("The chart is rendered only after the canonical recipe passes validation.")
+                            Text("The app checks the ingredients and steps before saving your recipe.")
                                 .font(.footnote)
                                 .foregroundStyle(RecipeTheme.secondaryInk)
                                 .multilineTextAlignment(.center)
@@ -134,7 +134,7 @@ struct ImportRecipeView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .accessibilityIdentifier("recipe-url")
-                Text("The service first looks for structured recipe data, then falls back to cleaned recipe prose.")
+                Text("The importer reads recipe data from the page. If it can't find any, it reads the recipe text.")
                     .font(.footnote)
                     .foregroundStyle(RecipeTheme.secondaryInk)
             }
@@ -144,7 +144,7 @@ struct ImportRecipeView: View {
                     .frame(minHeight: 220)
                     .font(.body)
                     .accessibilityIdentifier("recipe-text")
-                Text("Include both the ingredient list and the full method. Ambiguities will be preserved as warnings.")
+                Text("Paste the ingredient list and full method. The app flags anything unclear for you to review.")
                     .font(.footnote)
                     .foregroundStyle(RecipeTheme.secondaryInk)
             }
@@ -161,7 +161,7 @@ struct ImportRecipeView: View {
                     .accessibilityIdentifier("choose-photos")
                 }
                 if capturedImages.isEmpty {
-                    Text("Scan or choose up to four pages. Photos are normalized on device and discarded after extraction.")
+                    Text("Choose or scan up to four pages. The app prepares each photo on your device, and the import service discards it after reading the text.")
                         .font(.footnote)
                         .foregroundStyle(RecipeTheme.secondaryInk)
                 } else {

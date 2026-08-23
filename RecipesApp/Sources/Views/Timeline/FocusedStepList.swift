@@ -49,7 +49,7 @@ struct FocusedStepList: View {
                         .foregroundStyle(RecipeTheme.focusText)
                 }
                 .font(.subheadline.weight(.medium))
-                .accessibilityLabel("Completion cue: \(completionCue)")
+                .accessibilityLabel("Done when: \(completionCue)")
             }
 
             stageMetadata(stage)
@@ -246,7 +246,7 @@ struct FocusedStepList: View {
             parts.append("Add now: \(ingredientText)")
         }
         if let completionCue = stage.completionCue, !completionCue.isEmpty {
-            parts.append("Completion cue: \(completionCue)")
+            parts.append("Done when: \(completionCue)")
         }
         if let duration = stage.duration {
             parts.append("Duration: \(durationLabel(duration))")

@@ -33,9 +33,9 @@ enum APIClientError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidResponse: "The import service returned an invalid response."
+        case .invalidResponse: "The import service sent a response the app couldn't read."
         case let .rejected(_, message): message
-        case .missingIdentityToken: "Apple did not provide a usable identity token."
+        case .missingIdentityToken: "Sign in with Apple didn't return a valid sign-in token. Try again."
         case .missingSession: "Sign in with Apple before importing a recipe."
         case .invalidSource: "Add a recipe URL, text, or at least one cookbook image."
         }

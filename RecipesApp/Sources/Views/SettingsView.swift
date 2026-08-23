@@ -9,7 +9,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Import account") {
+                Section("Recipe import") {
                     switch auth.state {
                     case .signedIn:
                         Label("Signed in with Apple", systemImage: "checkmark.circle.fill")
@@ -27,13 +27,13 @@ struct SettingsView: View {
                 Section("Recipe library") {
                     LabeledContent("Storage", value: persistence.mode == .iCloud ? "iCloud" : "On this device")
                     if let error = persistence.setupError {
-                        Text("iCloud was unavailable, so the app opened a local library. \(error)")
+                        Text("iCloud isn't available, so this library is stored on this device. \(error)")
                             .font(.footnote)
                             .foregroundStyle(RecipeTheme.warning)
                     }
                 }
                 Section("Privacy") {
-                    Text("Recipe sources and generated recipes are not retained by the import proxy. Cleaned source text is stored only in your private library.")
+                    Text("The import service doesn't keep your source or imported recipe. The app saves cleaned source text only in your private library.")
                 }
             }
             .navigationTitle("Settings")

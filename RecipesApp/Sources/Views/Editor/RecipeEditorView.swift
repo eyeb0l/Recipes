@@ -27,7 +27,7 @@ struct RecipeEditorView: View {
                 Section("Recipe") {
                     TextField("Title", text: $draft.title)
                     TextField("Summary", text: Binding($draft.summary, replacingNilWith: ""), axis: .vertical)
-                    LabeledContent("Base servings") {
+                    LabeledContent("Original servings") {
                         TextField("Servings", value: $draft.recipeYield.servings, format: .number)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
@@ -57,7 +57,7 @@ struct RecipeEditorView: View {
                                     Text(ingredient.quantity?.displayString() ?? "No quantity")
                                         .foregroundStyle(RecipeTheme.secondaryInk)
                                 }
-                                Toggle("Scale", isOn: $ingredient.scalable)
+                                Toggle("Scale with servings", isOn: $ingredient.scalable)
                                     .labelsHidden()
                             }
                             .font(.subheadline)
@@ -100,7 +100,7 @@ struct RecipeEditorView: View {
                 }
 
                 if !draft.uncertainties.isEmpty {
-                    Section("Uncertainties") {
+                    Section("Source warnings") {
                         ForEach($draft.uncertainties) { $uncertainty in
                             Toggle(isOn: $uncertainty.isResolved) {
                                 VStack(alignment: .leading, spacing: 3) {
@@ -165,7 +165,7 @@ struct RecipeEditorView: View {
         let previous = draft.sortedStages.last
         draft.stages.append(.init(
             action: "New stage",
-            instruction: "Describe what changes and how to know this stage is complete.",
+            instruction: "Describe what to do and how you'll know it's done.",
             workstreamID: previous?.workstreamID,
             dependencies: previous.map { [$0.id] } ?? [],
             sortIndex: draft.stages.count
@@ -189,7 +189,7 @@ struct RecipeEditorView: View {
         applyStageOrder(ordered)
         if !RecipeValidator.validate(draft).isValid {
             draft = old
-            validationMessage = "That move would create an invalid dependency cycle."
+            validationMessage = "That stage can't move there because another stage depends on it."
         }
     }
 
@@ -231,29 +231,29 @@ private struct StageDetailEditor: View {
                         TextField("Action", text: $recipe.stages[index].action)
                         TextField("Instruction", text: $recipe.stages[index].instruction, axis: .vertical)
                             .lineLimit(3...8)
-                        TextField("Completion cue", text: Binding($recipe.stages[index].completionCue, replacingNilWith: ""), axis: .vertical)
-                        TextField("Result label", text: Binding($recipe.stages[index].resultLabel, replacingNilWith: ""))
+                        TextField("How to tell it's done", text: Binding($recipe.stages[index].completionCue, replacingNilWith: ""), axis: .vertical)
+                        TextField("Result name", text: Binding($recipe.stages[index].resultLabel, replacingNilWith: ""))
                     }
-                    Section("Workstream") {
+                    Section("Timeline lane") {
                         Picker("Lane", selection: $recipe.stages[index].workstreamID) {
-                            Text("Global").tag(String?.none)
+                            Text("Whole recipe").tag(String?.none)
                             ForEach(recipe.workstreams) { lane in Text(lane.name).tag(String?.some(lane.id)) }
                         }
                     }
-                    Section("Ingredients entering here") {
+                    Section("Ingredients added in this stage") {
                         ForEach(recipe.sortedIngredients) { ingredient in
                             Toggle(ingredient.name, isOn: ingredientUseBinding(stageIndex: index, ingredientID: ingredient.id))
                         }
                     }
-                    Section("Dependencies") {
+                    Section("Must follow") {
                         ForEach(recipe.sortedStages.filter { $0.id != stageID }) { candidate in
                             Toggle(candidate.action, isOn: dependencyBinding(stageIndex: index, dependencyID: candidate.id))
                         }
                     }
                     Section("Heat and timing") {
-                        TextField("Heat, e.g. medium-low", text: Binding($recipe.stages[index].heat, replacingNilWith: ""))
+                        TextField("Heat, for example medium-low", text: Binding($recipe.stages[index].heat, replacingNilWith: ""))
                         if let duration = recipe.stages[index].duration {
-                            Stepper("Minimum: \(duration.minimumSeconds / 60) min", value: Binding(
+                            Stepper("Minimum time: \(duration.minimumSeconds / 60) min", value: Binding(
                                 get: { recipe.stages[index].duration?.minimumSeconds ?? 0 },
                                 set: { recipe.stages[index].duration?.minimumSeconds = $0 }
                             ), in: 0...86_400, step: 60)

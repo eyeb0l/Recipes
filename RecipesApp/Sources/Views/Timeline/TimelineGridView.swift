@@ -173,7 +173,7 @@ struct TimelineGridView: View {
             grid(layout: layout, geometry: geometry)
         } else {
             ContentUnavailableView(
-                "Timeline unavailable", systemImage: "exclamationmark.triangle", description: Text("Resolve invalid stage dependencies in the editor."))
+                "Timeline unavailable", systemImage: "exclamationmark.triangle", description: Text("Open the editor and check which stages must follow others."))
         }
     }
 
@@ -221,7 +221,7 @@ struct TimelineGridView: View {
                 .padding(.horizontal, 16)
                 .frame(width: metrics.ingredientWidth, height: metrics.headerHeight, alignment: .leading)
                 .background(RecipeTheme.paper)
-            Text("PREP & GLOBAL")
+            Text("PREP & WHOLE RECIPE")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(RecipeTheme.secondaryInk)
                 .padding(.horizontal, 16)
@@ -357,7 +357,7 @@ private struct TimelineStageCard: View {
                 if warning {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(RecipeTheme.warning)
-                        .accessibilityLabel("Uncertainty")
+                        .accessibilityLabel("Source warning")
                 }
             }
             if stageDetail != nil || stage.duration != nil {
@@ -464,7 +464,7 @@ private struct TimelineStageCard: View {
 
     private var accessibilityLabel: String {
         var parts = [stage.action, stage.instruction]
-        if warning { parts.append("Contains an uncertainty") }
+        if warning { parts.append("Contains a source warning") }
         if isFocused { parts.append("Current stage") }
         if isCompleted { parts.append("Completed") }
         return parts.joined(separator: ". ")

@@ -61,7 +61,7 @@ struct CookModeView: View {
                     .accessibilityIdentifier("cook-mode-title")
                     .tracking(1.3)
                     .foregroundStyle(RecipeTheme.secondaryInk)
-                Text("\(session.completedStageIDs.count) of \(session.stages.count) stages")
+                Text("\(session.completedStageIDs.count) of \(session.stages.count) done")
                     .font(.title3.weight(.semibold))
             }
             Spacer()
@@ -118,7 +118,7 @@ struct CookModeView: View {
                     }
                 }
                 Spacer()
-                Text("Next")
+                Text("Current")
                     .font(.caption.weight(.bold))
                     .textCase(.uppercase)
                     .padding(.horizontal, 10)
@@ -133,7 +133,7 @@ struct CookModeView: View {
 
             if !stage.ingredientNames.isEmpty {
                 VStack(alignment: .leading, spacing: 7) {
-                    Text("Bring in")
+                    Text("Add now")
                         .font(.caption.weight(.bold))
                         .textCase(.uppercase)
                         .foregroundStyle(RecipeTheme.secondaryInk)
@@ -160,7 +160,7 @@ struct CookModeView: View {
             Button {
                 Task { await complete(stage.id) }
             } label: {
-                Label("Complete stage", systemImage: "checkmark")
+                Label("Mark complete", systemImage: "checkmark")
                     .font(.title3.weight(.bold))
                     .frame(maxWidth: .infinity)
             }
@@ -236,7 +236,7 @@ struct CookModeView: View {
             .filter { $0.id != session.focusedStageID }
         if !ready.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Ready in parallel")
+                Text("Also ready")
                     .font(.title2.weight(.semibold))
                 ForEach(ready) { stage in
                     Button {
@@ -263,7 +263,7 @@ struct CookModeView: View {
     private var completedStages: some View {
         let completed = session.stages.filter { session.completedStageIDs.contains($0.id) }
         if !completed.isEmpty {
-            DisclosureGroup("Completed (\(completed.count))") {
+            DisclosureGroup("\(completed.count) completed") {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(completed) { stage in
                         Label(stage.action, systemImage: "checkmark.circle.fill")
@@ -282,9 +282,9 @@ struct CookModeView: View {
             Image(systemName: "checkmark.seal.fill")
                 .font(.system(size: 58))
                 .foregroundStyle(RecipeTheme.focus)
-            Text("All stages complete")
+            Text("All done")
                 .font(.system(.largeTitle, design: .serif, weight: .bold))
-            Button("Return to recipe", action: onExit)
+            Button("Back to recipe", action: onExit)
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
         }
@@ -298,7 +298,7 @@ struct CookModeView: View {
         switch state.status {
         case .running: return "Pause · \(duration(state.secondsRemaining(at: date)))"
         case .paused: return "Resume · \(duration(state.secondsRemaining(at: date)))"
-        case .finished: return "Restart · Finished"
+        case .finished: return "Restart timer"
         case .cancelled: return "Start · \(duration(timer.durationSeconds))"
         }
     }
