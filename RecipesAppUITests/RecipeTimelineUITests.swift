@@ -138,17 +138,29 @@ final class RecipeTimelineUITests: XCTestCase {
 
         let scanPages = app.buttons["scan-pages"]
         let choosePhotos = app.buttons["choose-photos"]
+        let chooseFiles = app.buttons["choose-files"]
         XCTAssertTrue(scanPages.waitForExistence(timeout: 5))
         XCTAssertTrue(choosePhotos.waitForExistence(timeout: 5))
+        XCTAssertTrue(chooseFiles.waitForExistence(timeout: 5))
         XCTAssertEqual(scanPages.frame.width, choosePhotos.frame.width, accuracy: 2)
         XCTAssertEqual(scanPages.frame.midY, choosePhotos.frame.midY, accuracy: 1)
         XCTAssertGreaterThanOrEqual(scanPages.frame.height, 44)
         XCTAssertGreaterThanOrEqual(choosePhotos.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(chooseFiles.frame.height, 44)
+        XCTAssertGreaterThan(chooseFiles.frame.width, choosePhotos.frame.width * 1.8)
+        XCTAssertGreaterThan(chooseFiles.frame.minY, choosePhotos.frame.maxY)
         choosePhotos.tap()
 
         XCTAssertFalse(app.staticTexts["Position the document in view."].waitForExistence(timeout: 2))
         XCTAssertFalse(choosePhotos.isHittable)
-        XCTAssertTrue(app.staticTexts["Select Photos"].waitForExistence(timeout: 5))
+        let pickerHeading = app.staticTexts.matching(
+            NSPredicate(format: "label BEGINSWITH %@", "Select up to")
+        ).firstMatch
+        let photoPickerAppeared =
+            pickerHeading.waitForExistence(timeout: 5)
+            || app.buttons["Select Photos"].waitForExistence(timeout: 2)
+            || app.staticTexts["Select Photos"].waitForExistence(timeout: 2)
+        XCTAssertTrue(photoPickerAppeared)
     }
 
     private func launchSampleApp() -> XCUIApplication {

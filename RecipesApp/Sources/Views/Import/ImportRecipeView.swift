@@ -4,6 +4,7 @@ import RecipeCore
 import SwiftData
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 struct ImportRecipeView: View {
     private enum ImportKind: String, CaseIterable, Identifiable {
@@ -30,6 +31,7 @@ struct ImportRecipeView: View {
     @State private var capturedImages: [UIImage] = []
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var captureSheet: CaptureSheet?
+    @State private var isFileImporterPresented = false
     @State private var preferredUnits: UnitSystemPreference = .metric
     @State private var errorMessage: String?
 
@@ -121,6 +123,12 @@ struct ImportRecipeView: View {
             .onChange(of: photoItems) { _, newItems in
                 Task { await loadPhotoItems(newItems) }
             }
+            .fileImporter(
+                isPresented: $isFileImporterPresented,
+                allowedContentTypes: [.pdf, .image],
+                allowsMultipleSelection: true,
+                onCompletion: loadFiles
+            )
         }
         .editorialSurface()
     }
@@ -153,7 +161,7 @@ struct ImportRecipeView: View {
             Section("Cookbook pages") {
                 pageCaptureActions
                 if capturedImages.isEmpty {
-                    Text("Choose or scan up to four pages. The app prepares each photo on your device, and the import service discards it after reading the text.")
+                    Text("Scan, choose photos, or add a PDF or image from Files. The app prepares up to four pages on your device, and the import service discards them after reading the text.")
                         .font(.footnote)
                         .foregroundStyle(RecipeTheme.secondaryInk)
                 } else {
@@ -183,13 +191,19 @@ struct ImportRecipeView: View {
                 scanPagesAction
                 Divider()
                 choosePhotosAction
+                Divider()
+                chooseFilesAction
             }
         } else {
-            HStack(spacing: 0) {
-                scanPagesAction
+            VStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    scanPagesAction
+                    Divider()
+                        .frame(height: 28)
+                    choosePhotosAction
+                }
                 Divider()
-                    .frame(height: 28)
-                choosePhotosAction
+                chooseFilesAction
             }
         }
     }
@@ -214,6 +228,18 @@ struct ImportRecipeView: View {
         }
         .buttonStyle(.borderless)
         .accessibilityIdentifier("choose-photos")
+    }
+
+    private var chooseFilesAction: some View {
+        Button { isFileImporterPresented = true } label: {
+            Label("Choose from Files", systemImage: "folder")
+                .font(.headline)
+                .frame(maxWidth: .infinity, minHeight: 48, alignment: .center)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .accessibilityHint("Choose up to four PDF pages or images")
+        .accessibilityIdentifier("choose-files")
     }
 
     private var canImport: Bool {
@@ -268,5 +294,17 @@ struct ImportRecipeView: View {
             }
         }
         capturedImages = images
+    }
+
+    private func loadFiles(_ result: Result<[URL], Error>) {
+        do {
+            capturedImages = try CookbookFileImporter.images(from: result.get())
+            photoItems = []
+            errorMessage = nil
+        } catch CocoaError.userCancelled {
+            // Leaving the picker should not surface an error.
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }

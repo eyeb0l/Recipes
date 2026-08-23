@@ -6,6 +6,37 @@ import XCTest
 @testable import RecipeTimeline
 
 final class RecipeTimelineTests: XCTestCase {
+    @MainActor
+    func testCookbookFileImporterLoadsImagesAndLimitsPDFPages() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let imageURL = directory.appending(path: "cover.png")
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 240, height: 320)).image { context in
+            UIColor.systemPink.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 240, height: 320))
+        }
+        try XCTUnwrap(image.pngData()).write(to: imageURL)
+
+        let pdfURL = directory.appending(path: "recipe.pdf")
+        let pdfData = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 612, height: 792)).pdfData { renderer in
+            for pageNumber in 1...3 {
+                renderer.beginPage()
+                NSString(string: "Recipe page \(pageNumber)").draw(at: CGPoint(x: 40, y: 40), withAttributes: [.font: UIFont.systemFont(ofSize: 28)])
+            }
+        }
+        try pdfData.write(to: pdfURL)
+
+        let imported = try CookbookFileImporter.images(from: [imageURL, pdfURL], maximumPageCount: 3)
+
+        XCTAssertEqual(imported.count, 3)
+        XCTAssertEqual(imported[0].size.width / imported[0].size.height, 0.75, accuracy: 0.001)
+        XCTAssertGreaterThan(imported[0].size.width, 0)
+        XCTAssertEqual(max(imported[1].size.width, imported[1].size.height), 2_048, accuracy: 1)
+        XCTAssertEqual(max(imported[2].size.width, imported[2].size.height), 2_048, accuracy: 1)
+    }
+
     func testSessionTokensRoundTripThroughPersistentStorageCodec() throws {
         let expected = SessionTokens(
             accessToken: "access-token",
