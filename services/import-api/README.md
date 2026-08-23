@@ -31,6 +31,8 @@ The default provider is OpenAI with model ID `gpt-5.6-luna`. If account discover
 
 URL imports reject credentials, non-HTTP protocols, local/private/link-local/reserved IPs, unsafe DNS answers, unsafe redirect targets, excessive redirects, unsupported content types, large bodies, and timeouts. Structured Recipe JSON-LD is preferred, then Recipe microdata, then cleaned prose. The service does not bypass blocked sites.
 
+For serving counts, an unambiguous structured `recipeYield` is authoritative and is reconciled after model extraction. If structured data does not establish a count, readable page text is included for model extraction. Only the model's explicit `1`/`null` missing-yield fallback becomes a placeholder serving with a plain-language warning.
+
 Concurrent retries with the same user/idempotency key share only an in-flight promise. It is deleted immediately after completion, preserving the no-result-retention boundary.
 
 ## Provider contracts

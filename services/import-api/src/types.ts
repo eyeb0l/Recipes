@@ -17,6 +17,8 @@ export interface NormalizedRecipeSource {
   ingredientsText?: string;
   instructionsText?: string;
   prose?: string;
+  structuredYield?: { servings: number; label: string | null };
+  pageText?: string;
   recognizedText?: string;
   images: Array<{ mimeType: string; bytes: ArrayBuffer }>;
   locale: string;

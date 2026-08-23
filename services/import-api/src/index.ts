@@ -5,6 +5,7 @@ import { APIError, errorResponse } from "./errors";
 import type { Fetcher, HostResolver } from "./extraction/public-fetch";
 import { prepareImportRequest } from "./import-request";
 import { createExtractor, type RecipeExtractor } from "./providers";
+import { resolveRecipeServingCount } from "./serving-resolution";
 
 type Variables = { requestID: string };
 type AppBindings = { Bindings: Env; Variables: Variables };
@@ -87,6 +88,7 @@ async function performImport(
     throw new APIError(502, "invalid_model_output", "The provider returned an invalid canonical recipe.");
   }
   const recipe = structuredClone(result.recipe) as Record<string, unknown>;
+  resolveRecipeServingCount(recipe, prepared.source);
   recipe.provenance = prepared.provenance;
   validateCanonicalRecipe(recipe);
   return {

@@ -65,6 +65,8 @@ export async function prepareImportRequest(
         ingredientsText: extracted.ingredients.join("\n"),
         instructionsText: extracted.instructions.join("\n"),
         prose: extracted.ingredients.length || extracted.instructions.length ? undefined : extracted.cleanedText,
+        structuredYield: extracted.structuredYield,
+        pageText: extracted.method === "cleaned-prose" ? undefined : extracted.pageText,
         images: [],
         locale: metadata.locale,
         preferredUnitSystem: metadata.preferredUnitSystem

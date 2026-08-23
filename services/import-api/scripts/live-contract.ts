@@ -33,6 +33,6 @@ const sources = [
 for (const source of sources.filter((candidate) => !requestedSourceType || candidate.sourceType === requestedSourceType)) {
   const result = await extractor.extract(source, crypto.randomUUID());
   validateCanonicalRecipe(result.recipe);
-  const recipe = result.recipe as { stages: unknown[]; uncertainties: unknown[] };
-  process.stdout.write(`${result.provider}/${result.model} ${source.sourceType}: valid RecipeV1 (${recipe.stages.length} stages, ${recipe.uncertainties.length} uncertainties)\n`);
+  const recipe = result.recipe as { yield: { servings: number }; stages: unknown[]; uncertainties: unknown[] };
+  process.stdout.write(`${result.provider}/${result.model} ${source.sourceType}: valid RecipeV1 (${recipe.yield.servings} servings, ${recipe.stages.length} stages, ${recipe.uncertainties.length} uncertainties)\n`);
 }
