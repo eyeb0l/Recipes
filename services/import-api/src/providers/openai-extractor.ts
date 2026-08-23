@@ -7,6 +7,7 @@ import {
   parseProviderJSON,
   providerSchema,
   requireProviderResponse,
+  sourceWarningInstructions,
   type RecipeExtractor
 } from "./recipe-extractor";
 
@@ -36,6 +37,7 @@ export class OpenAIExtractor implements RecipeExtractor {
         model: this.model,
         store: false,
         reasoning: { effort: "low" },
+        instructions: sourceWarningInstructions,
         input: [{ role: "user", content }],
         text: { format: { type: "json_schema", name: "recipe_v1", strict: true, schema: providerSchema() } },
         max_output_tokens: 12_000

@@ -30,13 +30,19 @@ describe("provider adapters", () => {
     expect(result.provider).toBe("grok");
   });
 
-  it("uses low reasoning, Responses structured output, and disables storage for OpenAI", async () => {
+  it("uses concise warning instructions, low reasoning, structured output, and no storage for OpenAI", async () => {
     const fetcher = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ output: [{ content: [{ type: "output_text", text: JSON.stringify(validRecipe()) }] }] }), { status: 200 }));
     const result = await new OpenAIExtractor("gpt-5.6-luna", "sk-test", fetcher as typeof fetch).extract(source, "request-2");
     const body = JSON.parse(fetcher.mock.calls[0]![1]!.body as string);
     expect(body.model).toBe("gpt-5.6-luna");
     expect(body.store).toBe(false);
     expect(body.reasoning.effort).toBe("low");
+    expect(body.instructions).toContain("Each uncertainties[].message must:");
+    expect(body.instructions).toContain("Be one short sentence.");
+    expect(body.instructions).toContain("Avoid implementation language");
+    expect(body.instructions).toContain("The recipe doesn't say how many it serves, so the app shows 1.");
+    expect(body.instructions).toContain("The broth refers to a note that wasn't included.");
+    expect(body.instructions).toContain("The extra cooking time isn't exact.");
     expect(body.text.format.strict).toBe(true);
     expect(result.provider).toBe("openai");
   });

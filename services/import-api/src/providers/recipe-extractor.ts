@@ -32,6 +32,20 @@ export function providerSchema(): Record<string, unknown> {
   return schema;
 }
 
+export const sourceWarningInstructions = `Write uncertainty messages for the cook in plain language.
+
+Each uncertainties[].message must:
+- Be one short sentence.
+- Say only what is missing, unclear, or conflicting, plus any fallback that changes cooking or scaling.
+- Use specific recipe words, such as the ingredient or action.
+- Avoid implementation language such as schema, field, placeholder, source-provided, model, validation, provenance, or ID.
+- Keep any food-safety warning.
+
+Examples:
+- The recipe doesn't say how many it serves, so the app shows 1.
+- The broth refers to a note that wasn't included.
+- The extra cooking time isn't exact.`;
+
 export function extractionPrompt(source: NormalizedRecipeSource): string {
   const sourcePayload = source.ingredientsText || source.instructionsText
     ? [
