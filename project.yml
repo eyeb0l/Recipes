@@ -64,6 +64,7 @@ targets:
         AppGroupIdentifier: $(APP_GROUP_IDENTIFIER)
         ICloudContainerIdentifier: $(ICLOUD_CONTAINER_IDENTIFIER)
         ImportAPIBaseURL: $(IMPORT_API_BASE_URL)
+        ITSAppUsesNonExemptEncryption: false
         CFBundleURLTypes:
           - CFBundleURLName: com.irisgiertuga.RecipeTimeline
             CFBundleURLSchemes:

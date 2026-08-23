@@ -35,6 +35,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ICloudContainerIdentifier</key>
 	<string>$(ICLOUD_CONTAINER_IDENTIFIER)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>ImportAPIBaseURL</key>
 	<string>$(IMPORT_API_BASE_URL)</string>
 	<key>NSCameraUsageDescription</key>
