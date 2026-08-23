@@ -159,27 +159,32 @@ struct ImportRecipeView: View {
             }
         case .images:
             Section("Cookbook pages") {
-                pageCaptureActions
-                if capturedImages.isEmpty {
-                    Text("Scan, choose photos, or add a PDF or image from Files. The app prepares up to four pages on your device, and the import service discards them after reading the text.")
-                        .font(.footnote)
-                        .foregroundStyle(RecipeTheme.secondaryInk)
-                } else {
-                    ScrollView(.horizontal) {
-                        HStack(spacing: 10) {
-                            ForEach(Array(capturedImages.enumerated()), id: \.offset) { _, image in
-                                Image(uiImage: image)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 90, height: 120)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                VStack(alignment: .leading, spacing: 14) {
+                    pageCaptureActions
+                    Divider()
+                    if capturedImages.isEmpty {
+                        pageImportPrivacyNote
+                    } else {
+                        ScrollView(.horizontal) {
+                            HStack(spacing: 10) {
+                                ForEach(Array(capturedImages.enumerated()), id: \.offset) { _, image in
+                                    Image(uiImage: image)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 90, height: 120)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                }
                             }
                         }
+                        Label(
+                            "\(capturedImages.count) page\(capturedImages.count == 1 ? "" : "s") ready",
+                            systemImage: "checkmark.circle.fill"
+                        )
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(RecipeTheme.success)
                     }
-                    Text("\(capturedImages.count) page\(capturedImages.count == 1 ? "" : "s") ready")
-                        .font(.footnote)
-                        .foregroundStyle(RecipeTheme.secondaryInk)
                 }
+                .padding(.vertical, 2)
             }
         }
     }
@@ -187,22 +192,17 @@ struct ImportRecipeView: View {
     @ViewBuilder
     private var pageCaptureActions: some View {
         if dynamicTypeSize.isAccessibilitySize {
-            VStack(spacing: 0) {
+            VStack(spacing: 10) {
                 scanPagesAction
-                Divider()
                 choosePhotosAction
-                Divider()
                 chooseFilesAction
             }
         } else {
-            VStack(spacing: 0) {
-                HStack(spacing: 0) {
+            VStack(spacing: 10) {
+                HStack(spacing: 10) {
                     scanPagesAction
-                    Divider()
-                        .frame(height: 28)
                     choosePhotosAction
                 }
-                Divider()
                 chooseFilesAction
             }
         }
@@ -210,36 +210,58 @@ struct ImportRecipeView: View {
 
     private var scanPagesAction: some View {
         Button { captureSheet = .scanner } label: {
-            Label("Scan pages", systemImage: "doc.viewfinder")
-                .font(.headline)
-                .frame(maxWidth: .infinity, minHeight: 48, alignment: .center)
-                .contentShape(Rectangle())
+            PageImportActionLabel(
+                title: "Scan pages",
+                detail: "Use camera",
+                systemImage: "doc.viewfinder",
+                isCompact: !dynamicTypeSize.isAccessibilitySize
+            )
         }
         .buttonStyle(.borderless)
+        .accessibilityHint("Use the document camera")
         .accessibilityIdentifier("scan-pages")
     }
 
     private var choosePhotosAction: some View {
-        PhotosPicker(selection: $photoItems, maxSelectionCount: 4, matching: .images) {
-            Label("Choose photos", systemImage: "photo.on.rectangle")
-                .font(.headline)
-                .frame(maxWidth: .infinity, minHeight: 48, alignment: .center)
-                .contentShape(Rectangle())
+        let isCompact = !dynamicTypeSize.isAccessibilitySize
+        return PhotosPicker(selection: $photoItems, maxSelectionCount: 4, matching: .images) {
+            PageImportActionLabel(
+                title: "Choose photos",
+                detail: "Photo Library",
+                systemImage: "photo.on.rectangle",
+                isCompact: isCompact
+            )
         }
         .buttonStyle(.borderless)
+        .accessibilityHint("Choose up to four images from Photos")
         .accessibilityIdentifier("choose-photos")
     }
 
     private var chooseFilesAction: some View {
         Button { isFileImporterPresented = true } label: {
-            Label("Choose from Files", systemImage: "folder")
-                .font(.headline)
-                .frame(maxWidth: .infinity, minHeight: 48, alignment: .center)
-                .contentShape(Rectangle())
+            PageImportActionLabel(
+                title: "Choose from Files",
+                detail: "PDF or image",
+                systemImage: "folder",
+                isCompact: false
+            )
         }
         .buttonStyle(.borderless)
         .accessibilityHint("Choose up to four PDF pages or images")
         .accessibilityIdentifier("choose-files")
+    }
+
+    private var pageImportPrivacyNote: some View {
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: "lock.shield")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(RecipeTheme.focusText)
+                .frame(width: 18)
+            Text("Up to four pages. Images are prepared on this device and discarded by the import service after extraction.")
+                .font(.footnote)
+                .foregroundStyle(RecipeTheme.secondaryInk)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private var canImport: Bool {
@@ -306,5 +328,69 @@ struct ImportRecipeView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+}
+
+private struct PageImportActionLabel: View {
+    let title: String
+    let detail: String
+    let systemImage: String
+    let isCompact: Bool
+
+    var body: some View {
+        Group {
+            if isCompact {
+                VStack(spacing: 7) {
+                    PageImportActionIcon(systemImage: systemImage)
+                    VStack(spacing: 1) {
+                        Text(title)
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+                        Text(detail)
+                            .font(.caption)
+                            .foregroundStyle(RecipeTheme.secondaryInk)
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: 82, alignment: .center)
+            } else {
+                HStack(spacing: 11) {
+                    PageImportActionIcon(systemImage: systemImage)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(title)
+                            .font(.subheadline.weight(.semibold))
+                        Text(detail)
+                            .font(.caption)
+                            .foregroundStyle(RecipeTheme.secondaryInk)
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.forward")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(RecipeTheme.secondaryInk.opacity(0.72))
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal, 13)
+                .frame(maxWidth: .infinity, minHeight: 62, alignment: .leading)
+            }
+        }
+        .contentShape(Rectangle())
+        .background(RecipeTheme.stage.opacity(0.58), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(RecipeTheme.gridSubtle, lineWidth: 1)
+        }
+    }
+}
+
+private struct PageImportActionIcon: View {
+    let systemImage: String
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(RecipeTheme.focusText)
+            .frame(width: 32, height: 32)
+            .background(RecipeTheme.focus.opacity(0.13), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .accessibilityHidden(true)
     }
 }
