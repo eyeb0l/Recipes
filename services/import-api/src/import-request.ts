@@ -56,6 +56,9 @@ export async function prepareImportRequest(
   if (metadata.sourceType === "url") {
     const page = await fetchPublicRecipe(metadata.url!, fetcher, resolver ?? undefined);
     const extracted = extractRecipeFromHTML(page.contentType.includes("json") ? `<script type="application/ld+json">${page.body}</script>` : page.body);
+    if (isGenericLandingRedirect(metadata.url!, page.finalURL)) {
+      throw new APIError(422, "source_unavailable", "The recipe page redirected to a general site page. Paste its recipe text or scan the page instead.");
+    }
     return {
       metadata,
       source: {
@@ -88,6 +91,20 @@ export async function prepareImportRequest(
     },
     provenance: { sourceType: metadata.sourceType, url: null, title: null, cleanedText, importedAt }
   };
+}
+
+export function isGenericLandingRedirect(sourceURL: string, finalURL: string): boolean {
+  try {
+    const source = new URL(sourceURL);
+    const final = new URL(finalURL);
+    const sourcePath = source.pathname.replace(/\/+$/u, "").toLowerCase() || "/";
+    const finalPath = final.pathname.replace(/\/+$/u, "").toLowerCase() || "/";
+    if (sourcePath === finalPath) return false;
+    const sourceSegments = source.pathname.split("/").filter(Boolean);
+    return sourceSegments.length >= 1 && new Set(["/", "/recipe", "/recipes", "/cooking", "/food"]).has(finalPath);
+  } catch {
+    return false;
+  }
 }
 
 function parseMetadata(raw: string): ImportMetadata {

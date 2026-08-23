@@ -19,6 +19,9 @@ function isMissingServingCountUncertainty(value: unknown): boolean {
     .toLowerCase();
   const mentionsServingCount = /\b(?:yield|servings|serving count)\b/u.test(wording)
     || /\b(?:number of|how many|count of)\b[^.]{0,40}\b(?:serves?|portions?)\b/u.test(wording);
+  const describesConflictingEvidence = /\b(?:ambiguous|unclear|conflicting|conflict|range|between|varies)\b/u.test(wording)
+    || /\b\d+(?:\.\d+)?\s*(?:-|–|—|to|or)\s*\d+(?:\.\d+)?\b/u.test(wording);
+  if (mentionsServingCount && describesConflictingEvidence) return false;
   const saysItIsMissing = /\b(?:missing|unknown|unstated|unspecified|placeholder)\b/u.test(wording)
     || /\b(?:does not|doesn't|did not|didn't|no)\b[^.]{0,60}\b(?:yield|servings?|serves?|portions?)\b/u.test(wording)
     || /\bhow many\b[^.]{0,40}\bserves?\b/u.test(wording)
@@ -41,7 +44,8 @@ function missingServingCountUncertainty(): JSONObject {
 
 function usesMissingServingFallback(recipe: JSONObject): boolean {
   if (!isObject(recipe.yield)) return false;
-  return recipe.yield.servings === 1 && recipe.yield.label === null;
+  const label = recipe.yield.label;
+  return recipe.yield.servings === 1 && (label === null || (typeof label === "string" && label.trim().length === 0));
 }
 
 /**

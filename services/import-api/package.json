@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:live:sites": "node --import tsx scripts/recipe-site-compat.ts",
     "test:live:grok": "env -u XAI_API_KEY node --env-file=.dev.vars --import tsx scripts/live-contract.ts grok",
     "test:live:openai": "env -u OPENAI_API_KEY node --env-file=.dev.vars --import tsx scripts/live-contract.ts openai"
   },
