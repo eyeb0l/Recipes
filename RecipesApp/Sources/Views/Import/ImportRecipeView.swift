@@ -21,6 +21,7 @@ struct ImportRecipeView: View {
     @Environment(AuthSession.self) private var auth
     @Environment(AppRouter.self) private var router
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.modelContext) private var modelContext
     @State private var client = RecipeImportClient()
     @State private var kind: ImportKind = .url
@@ -150,16 +151,7 @@ struct ImportRecipeView: View {
             }
         case .images:
             Section("Cookbook pages") {
-                HStack {
-                    Button("Scan pages", systemImage: "doc.viewfinder") { captureSheet = .scanner }
-                        .buttonStyle(.borderless)
-                        .accessibilityIdentifier("scan-pages")
-                    PhotosPicker(selection: $photoItems, maxSelectionCount: 4, matching: .images) {
-                        Label("Choose photos", systemImage: "photo.on.rectangle")
-                    }
-                    .buttonStyle(.borderless)
-                    .accessibilityIdentifier("choose-photos")
-                }
+                pageCaptureActions
                 if capturedImages.isEmpty {
                     Text("Choose or scan up to four pages. The app prepares each photo on your device, and the import service discards it after reading the text.")
                         .font(.footnote)
@@ -182,6 +174,46 @@ struct ImportRecipeView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var pageCaptureActions: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(spacing: 0) {
+                scanPagesAction
+                Divider()
+                choosePhotosAction
+            }
+        } else {
+            HStack(spacing: 0) {
+                scanPagesAction
+                Divider()
+                    .frame(height: 28)
+                choosePhotosAction
+            }
+        }
+    }
+
+    private var scanPagesAction: some View {
+        Button { captureSheet = .scanner } label: {
+            Label("Scan pages", systemImage: "doc.viewfinder")
+                .font(.headline)
+                .frame(maxWidth: .infinity, minHeight: 48, alignment: .center)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .accessibilityIdentifier("scan-pages")
+    }
+
+    private var choosePhotosAction: some View {
+        PhotosPicker(selection: $photoItems, maxSelectionCount: 4, matching: .images) {
+            Label("Choose photos", systemImage: "photo.on.rectangle")
+                .font(.headline)
+                .frame(maxWidth: .infinity, minHeight: 48, alignment: .center)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .accessibilityIdentifier("choose-photos")
     }
 
     private var canImport: Bool {

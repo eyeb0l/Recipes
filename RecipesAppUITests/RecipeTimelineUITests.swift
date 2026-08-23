@@ -132,10 +132,18 @@ final class RecipeTimelineUITests: XCTestCase {
         importRecipe.tap()
 
         XCTAssertTrue(app.navigationBars["Import recipe"].waitForExistence(timeout: 5))
-        app.buttons["Scan pages"].tap()
+        let scanPagesSource = app.segmentedControls.buttons["Scan pages"]
+        XCTAssertTrue(scanPagesSource.waitForExistence(timeout: 3))
+        scanPagesSource.tap()
 
+        let scanPages = app.buttons["scan-pages"]
         let choosePhotos = app.buttons["choose-photos"]
-        XCTAssertTrue(choosePhotos.waitForExistence(timeout: 3))
+        XCTAssertTrue(scanPages.waitForExistence(timeout: 5))
+        XCTAssertTrue(choosePhotos.waitForExistence(timeout: 5))
+        XCTAssertEqual(scanPages.frame.width, choosePhotos.frame.width, accuracy: 2)
+        XCTAssertEqual(scanPages.frame.midY, choosePhotos.frame.midY, accuracy: 1)
+        XCTAssertGreaterThanOrEqual(scanPages.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(choosePhotos.frame.height, 44)
         choosePhotos.tap()
 
         XCTAssertFalse(app.staticTexts["Position the document in view."].waitForExistence(timeout: 2))
