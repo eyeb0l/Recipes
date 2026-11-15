@@ -162,7 +162,7 @@ struct RecipeDetailView: View {
                 }
             }
             .scrollIndicators(.hidden)
-            .scrollClipDisabled()
+            .modifier(BleedUnlessVerticalBar())
 
             scalingControls(recipe)
         }
@@ -427,5 +427,26 @@ private struct RecipeSourceView: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
         .editorialSurface()
+    }
+}
+
+/// Lets a horizontal scroller's content run past its edges as a hint that it scrolls, except where
+/// the system can put a vertical toolbar beside the content (iPhone Duo): there it would slide under the bar.
+private struct BleedUnlessVerticalBar: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 27.1, *) {
+            content.modifier(VerticalBarAwareBleed())
+        } else {
+            content.scrollClipDisabled()
+        }
+    }
+}
+
+@available(iOS 27.1, *)
+private struct VerticalBarAwareBleed: ViewModifier {
+    @Environment(\.toolbarVerticalEdge) private var toolbarVerticalEdge
+
+    func body(content: Content) -> some View {
+        content.scrollClipDisabled(toolbarVerticalEdge == nil)
     }
 }

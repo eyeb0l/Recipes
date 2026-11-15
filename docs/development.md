@@ -49,6 +49,14 @@ Add `-only-testing:RecipeCoreTests -only-testing:RecipeTimelineTests` to run onl
 
 The project compiles all app, framework, Live Activity, unit-test, and UI-test bundles without signing. Running tests needs a simulator; physical devices need a signing setup.
 
+### Changing window sizes and iPhone Duo
+
+The app's size can change while it runs: when iPhone Duo folds or unfolds, when a window is resized, and when a Pro Max iPhone rotates. Lay out from size classes and the space a view is given, never from the device, the screen or the orientation. `AppRootView` uses a single `NavigationSplitView`, which collapses to a stack at compact width, so the open recipe and its state survive the switch.
+
+`testOpenRecipeSurvivesWidthChanges` covers that switch. Run it on an iPhone 18 Pro Max, whose horizontal size class changes when it rotates. On other devices it passes without changing size class.
+
+XCTest can't fold the device, so UI tests on an iPhone Duo simulator only see the folded outer display. Before a release, check the unfolded inner display by hand in the iPhone Duo simulator, folding and unfolding with a recipe open, with a sheet open, and in cook mode.
+
 ### README screenshots
 
 The screenshots in `docs/images/` come from the snapshot UI tests (`testEditorialTimelineSnapshot`, `testRecipeDetailSnapshots`, and `testDarkCookModeSnapshot`), run on an iPad Pro 13-inch and an iPhone 18 Pro simulator. The cook-mode test launches the app with `--ui-testing-dark`, so that screenshot is in dark mode. Uninstall the app from the simulator first so a cook session from a previous run doesn't show up, then export the attachments from the result bundle:

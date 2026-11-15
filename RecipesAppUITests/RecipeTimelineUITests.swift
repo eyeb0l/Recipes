@@ -163,8 +163,14 @@ final class RecipeTimelineUITests: XCTestCase {
         let pickerHeading = app.staticTexts.matching(
             NSPredicate(format: "label BEGINSWITH %@", "Select up to")
         ).firstMatch
+        // On a newly created simulator the out-of-process picker can take minutes to connect. Until
+        // it does, the picker shows its own "Loading…" placeholder, which is still the photo picker.
+        let pickerPlaceholder = app.navigationBars.matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "PUPicker")
+        ).firstMatch
         let photoPickerAppeared =
             pickerHeading.waitForExistence(timeout: 5)
+            || pickerPlaceholder.exists
             || app.buttons["Select Photos"].waitForExistence(timeout: 2)
             || app.staticTexts["Select Photos"].waitForExistence(timeout: 2)
         XCTAssertTrue(photoPickerAppeared)
@@ -204,6 +210,30 @@ final class RecipeTimelineUITests: XCTestCase {
         let confirm = app.buttons.matching(NSPredicate(format: "label == %@", "End cooking")).element(boundBy: 1)
         if confirm.waitForExistence(timeout: 3) { confirm.tap() } else { app.buttons["End cooking"].firstMatch.tap() }
         XCTAssertFalse(app.staticTexts["cook-mode-title"].waitForExistence(timeout: 2))
+    }
+
+    func testOpenRecipeSurvivesWidthChanges() {
+        // Folding or unfolding iPhone Duo, resizing a window, and rotating a Pro Max iPhone all switch
+        // between compact and regular width while the app runs. The open recipe must stay on screen.
+        // Run on a Pro Max iPhone to cover the switch: rotation changes its horizontal size class.
+        let app = launchSampleApp()
+        openSampleRecipe(in: app)
+
+        let increment = app.buttons["servings-control-Increment"]
+        XCTAssertTrue(increment.waitForExistence(timeout: 3))
+        let startingServings = Int(increment.value as? String ?? "") ?? 9
+        increment.tap()
+        let chosen = "\(startingServings + 1)"
+        XCTAssertEqual(increment.value as? String, chosen)
+
+        useLandscapeOrientation()
+        XCTAssertTrue(app.buttons["start-cooking"].waitForExistence(timeout: 5))
+        XCTAssertEqual(increment.value as? String, chosen)
+        attachScreenshot(named: "recipe-after-width-change")
+
+        XCUIDevice.shared.orientation = .portrait
+        XCTAssertTrue(app.buttons["start-cooking"].waitForExistence(timeout: 5))
+        XCTAssertEqual(increment.value as? String, chosen)
     }
 
     func testLaunchingWithRealStorageDoesNotCrash() {
