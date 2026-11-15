@@ -20,7 +20,9 @@ final class RecipeTimelineUITests: XCTestCase {
         XCTAssertTrue(completeExists)
     }
 
-    func testEditorialTimelineSnapshot() {
+    func testEditorialTimelineSnapshot() throws {
+        // The editorial grid is the regular-width layout; iPhones show focused step cards instead.
+        try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "The timeline grid needs a regular-width iPad window.")
         useLandscapeOrientation()
         let app = launchSampleApp()
         openSampleRecipe(in: app)
@@ -163,6 +165,42 @@ final class RecipeTimelineUITests: XCTestCase {
         XCTAssertTrue(photoPickerAppeared)
     }
 
+    func testResumingKeepsTheServingsChosenWhenCookingStarted() {
+        let app = launchSampleApp()
+        openSampleRecipe(in: app)
+
+        let increment = app.buttons["servings-control-Increment"]
+        XCTAssertTrue(increment.waitForExistence(timeout: 3))
+        let startingServings = Int(increment.value as? String ?? "") ?? 9
+        increment.tap()
+        let chosen = "\(startingServings + 1)"
+        XCTAssertEqual(increment.value as? String, chosen)
+
+        app.buttons["start-cooking"].tap()
+        XCTAssertTrue(app.staticTexts["cook-mode-title"].waitForExistence(timeout: 5))
+        app.buttons["Close"].firstMatch.tap()
+
+        // Leave and reopen the recipe so the detail view loads from scratch.
+        let back = app.navigationBars.buttons["Recipes"]
+        if back.waitForExistence(timeout: 2) { back.tap() }
+        openSampleRecipe(in: app)
+        XCTAssertTrue(increment.waitForExistence(timeout: 3))
+        XCTAssertEqual(increment.value as? String, chosen)
+
+        app.buttons["start-cooking"].tap()
+        XCTAssertTrue(app.staticTexts["cook-mode-title"].waitForExistence(timeout: 5))
+        let scale = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS %@", "\(chosen) servings"))
+            .firstMatch
+        XCTAssertTrue(scale.waitForExistence(timeout: 3))
+
+        // Leave no active session behind for other tests.
+        app.buttons["end-cooking"].tap()
+        let confirm = app.buttons.matching(NSPredicate(format: "label == %@", "End cooking")).element(boundBy: 1)
+        if confirm.waitForExistence(timeout: 3) { confirm.tap() } else { app.buttons["End cooking"].firstMatch.tap() }
+        XCTAssertFalse(app.staticTexts["cook-mode-title"].waitForExistence(timeout: 2))
+    }
+
     private func launchSampleApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing"]
@@ -184,7 +222,9 @@ final class RecipeTimelineUITests: XCTestCase {
                 NSPredicate(format: "label BEGINSWITH %@", "Espresso Brownies")
             ).firstMatch
             XCTAssertTrue(recipe.waitForExistence(timeout: 5))
-            recipe.tap()
+            // Tap the title area: on a landscape iPhone with very large text, the floating search
+            // field can cover the middle of the row.
+            recipe.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
         }
         XCTAssertTrue(startCooking.waitForExistence(timeout: 5))
     }

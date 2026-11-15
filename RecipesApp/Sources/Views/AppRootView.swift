@@ -257,8 +257,9 @@ private struct RecipeLibrary: View {
         if router.selectedRecipeID == pending.id { router.selectedRecipeID = nil }
         // A deleted recipe can't be resumed, so stop its cooking session and Live Activity too.
         Task {
-            for session in sessions {
-                try? await CookSessionStore.shared.end(sessionID: session.id)
+            for snapshot in sessions {
+                // The stored session may have gained timers since this view loaded its copy.
+                let session = (try? await CookSessionStore.shared.end(sessionID: snapshot.id)) ?? snapshot
                 await CookTimerNotifications.cancelAll(session: session)
                 await CookActivityController.end(session: session)
             }
@@ -288,6 +289,7 @@ private struct ContinueCookingCard: View {
             HStack(spacing: 14) {
                 Image(systemName: "frying.pan.fill")
                     .font(.title3)
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 44)
                     .background(RecipeTheme.focus, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
@@ -299,7 +301,7 @@ private struct ContinueCookingCard: View {
                         .foregroundStyle(RecipeTheme.ink)
                     ProgressView(value: session.progress)
                         .tint(RecipeTheme.focus)
-                        .accessibilityLabel("\(session.completedStageIDs.count) of \(session.stages.count) stages done")
+                        .accessibilityHidden(true)
                 }
                 Image(systemName: "chevron.forward")
                     .font(.footnote.weight(.bold))
@@ -315,6 +317,10 @@ private struct ContinueCookingCard: View {
             .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Continue cooking \(session.recipeTitle)")
+        .accessibilityValue("\(session.completedStageIDs.count) of \(session.stages.count) stages done")
+        .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("continue-cooking")
     }
 }

@@ -45,6 +45,19 @@ public struct CookTimerState: Codable, Hashable, Identifiable, Sendable {
     }
 }
 
+/// An ingredient as it was when cooking started, so later recipe edits can't change a cook in progress.
+public struct CookIngredientSnapshot: Codable, Hashable, Sendable {
+    public var name: String
+    public var quantity: CulinaryQuantity?
+    public var scalable: Bool
+
+    public init(name: String, quantity: CulinaryQuantity?, scalable: Bool) {
+        self.name = name
+        self.quantity = quantity
+        self.scalable = scalable
+    }
+}
+
 public struct CookStageSnapshot: Codable, Hashable, Identifiable, Sendable {
     public var id: String
     public var action: String
@@ -52,6 +65,8 @@ public struct CookStageSnapshot: Codable, Hashable, Identifiable, Sendable {
     public var completionCue: String?
     public var dependencies: [String]
     public var ingredientNames: [String]
+    /// Amounts added at this stage. `nil` for sessions saved by earlier builds, which kept names only.
+    public var ingredients: [CookIngredientSnapshot]?
     public var timers: [StageTimer]
     public var heat: String?
     public var temperature: CookingTemperature?
@@ -64,6 +79,10 @@ public struct CookStageSnapshot: Codable, Hashable, Identifiable, Sendable {
         completionCue = stage.completionCue
         dependencies = stage.dependencies
         ingredientNames = stage.ingredientUses.compactMap { ingredients[$0.ingredientID]?.name }
+        self.ingredients = stage.ingredientUses.compactMap { use in
+            guard let ingredient = ingredients[use.ingredientID] else { return nil }
+            return .init(name: ingredient.name, quantity: use.quantity ?? ingredient.quantity, scalable: ingredient.scalable)
+        }
         timers = stage.timers
         heat = stage.heat
         temperature = stage.temperature
@@ -88,6 +107,8 @@ public struct CookSession: Codable, Hashable, Identifiable, Sendable {
     public var servings: Decimal?
     /// The display units chosen when cooking started. `nil` for sessions saved by earlier builds.
     public var unitSystem: UnitSystemPreference?
+    /// The recipe's own serving count when cooking started; the base for scaling snapshot amounts.
+    public var baseServings: Decimal?
 
     public init(
         recipe: RecipeV1,
@@ -110,6 +131,23 @@ public struct CookSession: Codable, Hashable, Identifiable, Sendable {
         endedAt = nil
         self.servings = servings
         self.unitSystem = unitSystem
+        baseServings = recipe.recipeYield.servings
+    }
+
+    /// What to add at a stage, scaled to the session's servings and units, from the snapshot taken
+    /// when cooking started. Sessions from earlier builds fall back to ingredient names.
+    public func ingredientLines(for stage: CookStageSnapshot) -> [String] {
+        guard let ingredients = stage.ingredients else { return stage.ingredientNames }
+        let base = baseServings ?? 0
+        let factor = base > 0 ? (servings ?? base) / base : 1
+        let units = unitSystem ?? .source
+        return ingredients.map { ingredient in
+            let amount = ingredient.quantity?
+                .scaled(by: factor, enabled: ingredient.scalable)
+                .converted(for: units)
+                .displayString()
+            return [amount, ingredient.name].compactMap { $0 }.joined(separator: " ")
+        }
     }
 
     /// The share of stages finished, from 0 to 1.
@@ -236,6 +274,11 @@ public actor CookSessionStore {
             }
             if let index = session.timers.firstIndex(where: { $0.id == compositeID }) {
                 var existing = session.timers[index]
+                // A running timer past its deadline is finished even before reconciliation records it,
+                // so the cook's tap restarts it rather than pausing it at zero.
+                if existing.status == .running, existing.secondsRemaining(at: date) == 0 {
+                    existing.status = .finished
+                }
                 switch existing.status {
                 case .running:
                     existing.remainingSeconds = existing.secondsRemaining(at: date)
@@ -295,10 +338,17 @@ public actor CookSessionStore {
         }
     }
 
-    public func end(sessionID: String, date: Date = Date()) throws {
-        _ = try update(sessionID: sessionID) { session in
+    /// Abandons a session: it stops being resumable and its timers stop, so nothing reschedules them.
+    /// Returns the stored session, including timers started elsewhere (for example from a Live Activity).
+    @discardableResult
+    public func end(sessionID: String, date: Date = Date()) throws -> CookSession {
+        try update(sessionID: sessionID) { session in
             session.endedAt = date
             session.updatedAt = date
+            for index in session.timers.indices where session.timers[index].status == .running || session.timers[index].status == .paused {
+                session.timers[index].status = .cancelled
+                session.timers[index].endDate = nil
+            }
         }
     }
 

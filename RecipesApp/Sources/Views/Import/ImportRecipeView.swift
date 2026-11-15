@@ -167,7 +167,10 @@ struct ImportRecipeView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .submitLabel(.go)
-                        .onSubmit { if canImport { Task { await importRecipe() } } }
+                        .onSubmit {
+                            guard canImport, auth.isAuthenticated, client.state != .importing else { return }
+                            Task { await importRecipe() }
+                        }
                         .accessibilityIdentifier("recipe-url")
                     PasteButton(payloadType: String.self) { strings in
                         guard let pasted = strings.first?.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
@@ -352,11 +355,12 @@ struct ImportRecipeView: View {
 
     /// Changes whenever the content to import changes, so a retry of the same content keeps its key.
     private var importFingerprint: String {
-        switch kind {
+        let content = switch kind {
         case .url: "url:\(urlText)"
         case .text: "text:\(pastedText)"
         case .images: "images:\(capturedImages.map { ObjectIdentifier($0).hashValue })"
         }
+        return "\(preferredUnits.rawValue)|\(content)"
     }
 
     /// Accepts pasted links with surrounding whitespace or without a scheme, such as "example.com/recipe".

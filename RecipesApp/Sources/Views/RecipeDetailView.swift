@@ -107,15 +107,18 @@ struct RecipeDetailView: View {
             servings = 1
             do {
                 let loaded = try record.recipe()
+                let session = try? await CookSessionStore.shared.activeSession(for: record.id)
                 recipe = loaded
-                servings = NSDecimalNumber(decimal: loaded.recipeYield.resolvedServings).doubleValue
+                activeSession = session
+                // A cook in progress keeps the scale it started with until the cook changes it here.
+                servings = NSDecimalNumber(decimal: session?.servings ?? loaded.recipeYield.resolvedServings).doubleValue
                 gatheredIngredientIDs.formIntersection(loaded.ingredients.map(\.id))
             } catch {
                 loadError = error.localizedDescription
             }
         }
-        .task(id: "\(record.id)|\(router.activeCookSession?.id ?? "")") {
-            activeSession = try? await CookSessionStore.shared.activeSession(for: record.id)
+        .onChange(of: router.activeCookSession?.id) {
+            Task { activeSession = try? await CookSessionStore.shared.activeSession(for: record.id) }
         }
     }
 
@@ -363,6 +366,8 @@ struct RecipeDetailView: View {
             }
             .primaryGlassButton()
             .controlSize(.extraLarge)
+            // The floating button must not cover most of a landscape iPhone at the largest text sizes.
+            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
             .accessibilityIdentifier("start-cooking")
         }
         .frame(maxWidth: .infinity, alignment: horizontalSizeClass == .compact ? .center : .trailing)

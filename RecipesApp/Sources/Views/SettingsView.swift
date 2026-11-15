@@ -49,7 +49,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Display")
                 } footer: {
-                    Text("Used for new recipes and imports. Each recipe keeps its original amounts.")
+                    Text("Used for imports, recipes, and cook mode. You can also switch units on any recipe. Each recipe keeps its original amounts.")
                 }
                 Section("Privacy") {
                     Text("The import service doesn't keep your source or imported recipe. The app saves cleaned source text only in your private library.")

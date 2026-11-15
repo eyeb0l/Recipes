@@ -64,6 +64,11 @@ struct CookModeHost: View {
     private func load() async {
         do {
             let restored = try await CookSessionStore.shared.reconcileTimers(sessionID: sessionID)
+            // A cook link or Live Activity can point at a session the cook already ended.
+            guard restored.endedAt == nil || restored.isComplete else {
+                errorMessage = "This cooking session has ended. Start cooking again from the recipe."
+                return
+            }
             session = restored
             recipe = records.first(where: { $0.id == restored.recipeID }).flatMap { try? $0.recipe() }
             await CookTimerNotifications.sync(session: restored)
@@ -74,15 +79,16 @@ struct CookModeHost: View {
     }
 
     private func endSession() async {
-        guard let session else { return exit() }
+        guard let current = session else { return exit() }
+        let ended: CookSession
         do {
-            try await CookSessionStore.shared.end(sessionID: session.id)
+            ended = try await CookSessionStore.shared.end(sessionID: current.id)
         } catch {
             endError = error.localizedDescription
             return
         }
-        await CookTimerNotifications.cancelAll(session: session)
-        await CookActivityController.end(session: session)
+        await CookTimerNotifications.cancelAll(session: ended)
+        await CookActivityController.end(session: ended)
         exit()
     }
 

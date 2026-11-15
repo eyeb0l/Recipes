@@ -240,10 +240,11 @@ describe("import API", () => {
     expect(quotaValue()).toBe("1");
   });
 
-  it("rejects work once the daily allowance is used without calling the provider", async () => {
+  it("rejects work once the daily allowance is used without fetching the source or calling the provider", async () => {
     const env = testEnv();
     const extract = vi.fn();
-    const app = createApp({ verifyApple: async () => "opaque-apple-subject", extractorFactory: () => ({ provider: "openai", model: "gpt-6.1-terra", extract }) });
+    const fetcher = vi.fn(async () => new Response("<html></html>", { headers: { "Content-Type": "text/html" } }));
+    const app = createApp({ verifyApple: async () => "opaque-apple-subject", fetcher, resolver: publicResolver, extractorFactory: () => ({ provider: "openai", model: "gpt-6.1-terra", extract }) });
     const token = await accessToken(app, env);
     const kv = env.SESSIONS as unknown as MemoryKV;
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("opaque-apple-subject"));
@@ -252,6 +253,32 @@ describe("import API", () => {
     const response = await app.request("/v1/recipe-imports", importRequest(token, "over-quota"), env);
     expect(response.status).toBe(429);
     expect((await response.json() as any).error.code).toBe("quota_exceeded");
+    const urlResponse = await app.request("/v1/recipe-imports", urlImportRequest(token, "over-quota-url"), env);
+    expect(urlResponse.status).toBe(429);
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(extract).not.toHaveBeenCalled();
+  });
+
+  it("limits outbound page fetches per day even when the fetched page can't be used", async () => {
+    const env = testEnv();
+    const kv = env.SESSIONS as unknown as MemoryKV;
+    const extract = vi.fn();
+    const fetcher = vi.fn(async () => new Response("not found", { status: 404, headers: { "Content-Type": "text/html" } }));
+    const app = createApp({ verifyApple: async () => "opaque-apple-subject", fetcher, resolver: publicResolver, extractorFactory: () => ({ provider: "openai", model: "gpt-6.1-terra", extract }) });
+    const token = await accessToken(app, env);
+
+    const failed = await app.request("/v1/recipe-imports", urlImportRequest(token, "missing-page"), env);
+    expect(failed.status).toBeGreaterThanOrEqual(400);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect([...kv.values.entries()].find(([key]) => key.startsWith("fetch-quota:"))?.[1]).toBe("1");
+    expect([...kv.values.keys()].some((key) => key.startsWith("quota:"))).toBe(false);
+
+    const fetchKey = [...kv.values.keys()].find((key) => key.startsWith("fetch-quota:"))!;
+    kv.values.set(fetchKey, "40");
+    const limited = await app.request("/v1/recipe-imports", urlImportRequest(token, "another-page"), env);
+    expect(limited.status).toBe(429);
+    expect((await limited.json() as any).error.code).toBe("fetch_quota_exceeded");
+    expect(fetcher).toHaveBeenCalledTimes(1);
     expect(extract).not.toHaveBeenCalled();
   });
 

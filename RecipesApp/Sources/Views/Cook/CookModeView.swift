@@ -91,30 +91,11 @@ struct CookModeView: View {
     }
 
     private var scaleDescription: String? {
-        guard let recipe, let servings = session.servings else { return nil }
+        guard let servings = session.servings else { return nil }
         let count = NSDecimalNumber(decimal: servings).doubleValue.formatted(.number.precision(.fractionLength(0...1)))
         let units = session.unitSystem.map { " · \($0.displayName)" } ?? ""
-        let scaled = servings == recipe.recipeYield.servings ? "" : " (scaled)"
+        let scaled = session.baseServings.map { $0 == servings } ?? true ? "" : " (scaled)"
         return "\(count) serving\(servings == 1 ? "" : "s")\(scaled)\(units)"
-    }
-
-    /// The amounts to add at a stage, scaled to the servings chosen when cooking started.
-    private func ingredientLines(for stage: CookStageSnapshot) -> [String] {
-        guard let recipe, let sourceStage = recipe.stages.first(where: { $0.id == stage.id }) else {
-            return stage.ingredientNames
-        }
-        let ingredients = Dictionary(recipe.ingredients.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let base = recipe.recipeYield.servings
-        let factor = base > 0 ? (session.servings ?? base) / base : 1
-        let units = session.unitSystem ?? .source
-        return sourceStage.ingredientUses.compactMap { use in
-            guard let ingredient = ingredients[use.ingredientID] else { return nil }
-            let amount = (use.quantity ?? ingredient.quantity)?
-                .scaled(by: factor, enabled: ingredient.scalable)
-                .converted(for: units)
-                .displayString()
-            return [amount, ingredient.name].compactMap { $0 }.joined(separator: " ")
-        }
     }
 
     private func prepChecklist(_ recipe: RecipeV1) -> some View {
@@ -173,7 +154,7 @@ struct CookModeView: View {
                 .lineSpacing(7)
                 .fixedSize(horizontal: false, vertical: true)
 
-            let lines = ingredientLines(for: stage)
+            let lines = session.ingredientLines(for: stage)
             if !lines.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     EyebrowLabel("Add now", color: RecipeTheme.focusText)
@@ -410,7 +391,9 @@ struct CookModeView: View {
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(15))
             guard !Task.isCancelled else { return }
-            if let updated = try? await CookSessionStore.shared.reconcileTimers(sessionID: session.id), updated != session {
+            if let updated = try? await CookSessionStore.shared.reconcileTimers(sessionID: session.id),
+               updated != session,
+               updated.endedAt == nil || updated.isComplete {
                 onSessionChanged(updated)
                 await CookActivityController.startOrUpdate(session: updated)
             }

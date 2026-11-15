@@ -3,6 +3,11 @@ import Foundation
 
 public enum CookActivityController {
     public static func startOrUpdate(session: CookSession) async {
+        // An abandoned session must never revive its activity, even if a stale update races the end.
+        if session.endedAt != nil, !session.isComplete {
+            await end(session: session)
+            return
+        }
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         if let activity = activity(for: session.id) {
             await activity.update(content(for: session))
