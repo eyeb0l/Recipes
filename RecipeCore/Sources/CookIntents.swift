@@ -90,6 +90,14 @@ public enum CookTimerNotifications {
         }
     }
 
+    /// Withdraws every pending and delivered timer alert for a session the cook has finished or abandoned.
+    public static func cancelAll(session: CookSession) async {
+        let center = UNUserNotificationCenter.current()
+        let identifiers = session.timers.map { notificationID(sessionID: session.id, timerID: $0.id) }
+        center.removePendingNotificationRequests(withIdentifiers: identifiers)
+        center.removeDeliveredNotifications(withIdentifiers: identifiers)
+    }
+
     private static func notificationID(sessionID: String, timerID: String) -> String {
         "cook:\(sessionID):\(timerID)"
     }

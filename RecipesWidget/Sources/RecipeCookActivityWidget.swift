@@ -7,14 +7,14 @@ struct RecipeCookActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: CookActivityAttributes.self) { context in
             LockScreenCookView(context: context)
-                .activityBackgroundTint(Color(red: 0.12, green: 0.105, blue: 0.09))
+                .activityBackgroundTint(CookActivityPalette.background)
                 .activitySystemActionForegroundColor(.white)
                 .widgetURL(URL(string: "recipetimeline://cook?session=\(context.attributes.sessionID)"))
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     Image(systemName: "fork.knife")
-                        .foregroundStyle(.pink)
+                        .foregroundStyle(CookActivityPalette.accent)
                 }
                 DynamicIslandExpandedRegion(.center) {
                     VStack(spacing: 2) {
@@ -33,17 +33,23 @@ struct RecipeCookActivityWidget: Widget {
                 }
             } compactLeading: {
                 Image(systemName: "fork.knife")
-                    .foregroundStyle(.pink)
+                    .foregroundStyle(CookActivityPalette.accent)
             } compactTrailing: {
                 TimerLabel(state: context.state)
                     .font(.caption2)
             } minimal: {
                 Image(systemName: context.state.isComplete ? "checkmark" : "timer")
-                    .foregroundStyle(.pink)
+                    .foregroundStyle(CookActivityPalette.accent)
             }
             .widgetURL(URL(string: "recipetimeline://cook?session=\(context.attributes.sessionID)"))
         }
     }
+}
+
+private enum CookActivityPalette {
+    /// The app's paprika accent, in its dark-surface variant.
+    static let accent = Color(red: 0xF0 / 255, green: 0x87 / 255, blue: 0x5F / 255)
+    static let background = Color(red: 0x1D / 255, green: 0x1A / 255, blue: 0x16 / 255)
 }
 
 private struct LockScreenCookView: View {
@@ -57,13 +63,16 @@ private struct LockScreenCookView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text(context.state.focusedAction)
-                        .font(.title3.weight(.semibold))
+                        .font(.system(.title3, design: .serif, weight: .semibold))
+                    Text("\(context.state.completedStageCount) of \(context.state.totalStageCount) stages done")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
                 TimerLabel(state: context.state)
             }
             ProgressView(value: Double(context.state.completedStageCount), total: Double(max(context.state.totalStageCount, 1)))
-                .tint(.pink)
+                .tint(CookActivityPalette.accent)
             ActivityActions(attributes: context.attributes, state: context.state)
         }
         .padding()
@@ -103,7 +112,7 @@ private struct ActivityActions: View {
                 Button(intent: CompleteCookStageIntent(sessionID: attributes.sessionID, stageID: stageID)) {
                     Label("Complete", systemImage: "checkmark.circle.fill")
                 }
-                .tint(.pink)
+                .tint(CookActivityPalette.accent)
             }
             if let timerID = state.nearestTimerID, let stageID = state.nearestTimerStageID {
                 Button(intent: ToggleCookTimerIntent(sessionID: attributes.sessionID, stageID: stageID, timerID: timerID)) {

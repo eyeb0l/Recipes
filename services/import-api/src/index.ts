@@ -57,13 +57,16 @@ export function createApp(dependencies: AppDependencies = {}) {
     const quotaKey = await subjectDigest(claims.sub);
     const quota = await context.env.IMPORT_RATE_LIMITER.limit({ key: quotaKey });
     if (!quota.success) throw new APIError(429, "rate_limited", "Too many imports were started at once. Try again shortly.");
-    await consumeDailyQuota(context.env, quotaKey);
 
+    // Invalid sources and retries that join in-flight work never reach the provider, so they don't use the daily allowance.
     const prepared = await prepareImportRequest(context.req.raw, dependencies.fetcher, dependencies.resolver);
     const dedupeKey = `${quotaKey}:${prepared.metadata.idempotencyKey}`;
     let work = inFlightImports.get(dedupeKey);
     if (!work) {
-      work = performImport(context.env, prepared, context.get("requestID"), dependencies.extractorFactory);
+      const env = context.env;
+      const requestID = context.get("requestID");
+      work = consumeDailyQuota(env, quotaKey)
+        .then(() => performImport(env, prepared, requestID, dependencies.extractorFactory));
       inFlightImports.set(dedupeKey, work);
       void work.finally(() => inFlightImports.delete(dedupeKey)).catch(() => undefined);
     }

@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { GrokExtractor } from "../src/providers/grok-extractor";
-import { OpenAIExtractor } from "../src/providers/openai-extractor";
-import { createExtractor } from "../src/providers";
+import { OpenAIExtractor, openAIMaxOutputTokens } from "../src/providers/openai-extractor";
+import { createExtractor, defaultOpenAIModel } from "../src/providers";
 import { extractionPrompt } from "../src/providers/recipe-extractor";
 import type { NormalizedRecipeSource } from "../src/types";
 import { testEnv, validRecipe } from "./fixtures";
@@ -11,31 +10,29 @@ const source: NormalizedRecipeSource = {
 };
 
 describe("provider adapters", () => {
-  it("defaults the deployment to OpenAI Luna and keeps Grok explicit", () => {
-    const active = createExtractor(testEnv());
+  it("uses OpenAI GPT-6.1 Terra by default and honours an explicit OpenAI model override", () => {
+    expect(defaultOpenAIModel).toBe("gpt-6.1-terra");
+    const active = createExtractor(testEnv({ OPENAI_MODEL: "" }));
     expect(active.provider).toBe("openai");
-    expect(active.model).toBe("gpt-5.6-luna");
+    expect(active.model).toBe("gpt-6.1-terra");
 
-    const legacy = createExtractor(testEnv({ RECIPE_PROVIDER: "grok" }));
-    expect(legacy.provider).toBe("grok");
-    expect(legacy.model).toBe("grok-4.6");
+    const override = createExtractor(testEnv({ OPENAI_MODEL: " gpt-6-luna " }));
+    expect(override.provider).toBe("openai");
+    expect(override.model).toBe("gpt-6-luna");
   });
 
-  it("sends Grok the strict shared schema without fallback", async () => {
-    const fetcher = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(validRecipe()) } }] }), { status: 200 }));
-    const result = await new GrokExtractor("grok-4.6", "xai-test", fetcher as typeof fetch).extract(source, "request-1");
-    const body = JSON.parse(fetcher.mock.calls[0]![1]!.body as string);
-    expect(body.model).toBe("grok-4.6");
-    expect(body.reasoning_effort).toBe("low");
-    expect(body.response_format.json_schema.strict).toBe(true);
-    expect(result.provider).toBe("grok");
+  it("requires an OpenAI key rather than substituting another provider", () => {
+    expect(() => createExtractor(testEnv({ OPENAI_API_KEY: undefined }))).toThrowError(expect.objectContaining({ code: "provider_not_configured" }));
   });
 
   it("uses concise warning instructions, low reasoning, structured output, and no storage for OpenAI", async () => {
     const fetcher = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ output: [{ content: [{ type: "output_text", text: JSON.stringify(validRecipe()) }] }] }), { status: 200 }));
-    const result = await new OpenAIExtractor("gpt-5.6-luna", "sk-test", fetcher as typeof fetch).extract(source, "request-2");
+    const result = await new OpenAIExtractor("gpt-6.1-terra", "sk-test", fetcher as typeof fetch).extract(source, "request-2");
     const body = JSON.parse(fetcher.mock.calls[0]![1]!.body as string);
-    expect(body.model).toBe("gpt-5.6-luna");
+    expect(body.model).toBe("gpt-6.1-terra");
+    expect(body.max_output_tokens).toBe(openAIMaxOutputTokens);
+    expect(body).not.toHaveProperty("temperature");
+    expect(fetcher.mock.calls[0]![0]).toBe("https://api.openai.com/v1/responses");
     expect(body.store).toBe(false);
     expect(body.reasoning.effort).toBe("low");
     expect(body.instructions).toContain("Each uncertainties[].message must:");
@@ -120,7 +117,7 @@ describe("provider adapters", () => {
 
   it("does not silently substitute on provider failure", async () => {
     const fetcher = vi.fn(async () => new Response("denied", { status: 403 }));
-    await expect(new GrokExtractor("grok-4.6", "xai-test", fetcher as typeof fetch).extract(source, "request-3"))
+    await expect(new OpenAIExtractor("gpt-6.1-terra", "sk-test", fetcher as typeof fetch).extract(source, "request-3"))
       .rejects.toMatchObject({ code: "provider_error" });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
@@ -128,13 +125,32 @@ describe("provider adapters", () => {
   it("reports provider timeouts without exposing an internal error", async () => {
     const timeout = Object.assign(new Error("request aborted"), { name: "TimeoutError" });
     const fetcher = vi.fn(async () => { throw timeout; });
-    await expect(new GrokExtractor("grok-4.6", "xai-test", fetcher as typeof fetch).extract(source, "request-4"))
+    await expect(new OpenAIExtractor("gpt-6.1-terra", "sk-test", fetcher as typeof fetch).extract(source, "request-4"))
       .rejects.toMatchObject({ status: 504, code: "provider_timeout" });
   });
 
   it("reports provider transport failures without exposing an internal error", async () => {
     const fetcher = vi.fn(async () => { throw new TypeError("network unavailable"); });
-    await expect(new OpenAIExtractor("gpt-5.6-luna", "sk-test", fetcher as typeof fetch).extract(source, "request-5"))
+    await expect(new OpenAIExtractor("gpt-6.1-terra", "sk-test", fetcher as typeof fetch).extract(source, "request-5"))
       .rejects.toMatchObject({ status: 503, code: "provider_unavailable" });
+  });
+
+  it("explains truncated output instead of reporting malformed JSON", async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      status: "incomplete",
+      incomplete_details: { reason: "max_output_tokens" },
+      output: [{ type: "message", content: [{ type: "output_text", text: "{\"schemaVersion\":1," }] }]
+    }), { status: 200 }));
+    await expect(new OpenAIExtractor("gpt-6.1-terra", "sk-test", fetcher as typeof fetch).extract(source, "request-6"))
+      .rejects.toMatchObject({ status: 502, code: "incomplete_model_output", message: expect.stringContaining("too long") });
+  });
+
+  it("reports a model refusal as an unreadable source", async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      status: "completed",
+      output: [{ type: "message", content: [{ type: "refusal", refusal: "I can't help with that." }] }]
+    }), { status: 200 }));
+    await expect(new OpenAIExtractor("gpt-6.1-terra", "sk-test", fetcher as typeof fetch).extract(source, "request-7"))
+      .rejects.toMatchObject({ status: 422, code: "source_unreadable" });
   });
 });

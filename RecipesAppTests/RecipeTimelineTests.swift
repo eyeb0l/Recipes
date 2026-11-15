@@ -191,4 +191,27 @@ final class RecipeTimelineTests: XCTestCase {
             "57½ g"
         )
     }
+
+    @MainActor
+    func testRecipeURLNormalisationAcceptsPastedLinksAndRejectsNonLinks() {
+        XCTAssertEqual(
+            ImportRecipeView.normalizedRecipeURL(from: "  https://example.com/recipes/stew \n")?.absoluteString,
+            "https://example.com/recipes/stew"
+        )
+        XCTAssertEqual(
+            ImportRecipeView.normalizedRecipeURL(from: "example.com/recipes/stew")?.absoluteString,
+            "https://example.com/recipes/stew"
+        )
+        XCTAssertEqual(ImportRecipeView.normalizedRecipeURL(from: "http://example.org/a")?.scheme, "http")
+        XCTAssertNil(ImportRecipeView.normalizedRecipeURL(from: ""))
+        XCTAssertNil(ImportRecipeView.normalizedRecipeURL(from: "ftp://example.com/recipe"))
+        XCTAssertNil(ImportRecipeView.normalizedRecipeURL(from: "chocolate cake"))
+        XCTAssertNil(ImportRecipeView.normalizedRecipeURL(from: "localhost"))
+    }
+
+    @MainActor
+    func testPastedTextThresholdMatchesTheImportService() {
+        // services/import-api rejects trimmed text shorter than 40 characters.
+        XCTAssertEqual(ImportRecipeView.minimumPastedTextLength, 40)
+    }
 }

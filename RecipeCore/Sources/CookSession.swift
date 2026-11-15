@@ -84,8 +84,17 @@ public struct CookSession: Codable, Hashable, Identifiable, Sendable {
     public var startedAt: Date
     public var updatedAt: Date
     public var endedAt: Date?
+    /// The serving count chosen when cooking started. `nil` for sessions saved by earlier builds.
+    public var servings: Decimal?
+    /// The display units chosen when cooking started. `nil` for sessions saved by earlier builds.
+    public var unitSystem: UnitSystemPreference?
 
-    public init(recipe: RecipeV1, date: Date = Date()) {
+    public init(
+        recipe: RecipeV1,
+        servings: Decimal? = nil,
+        unitSystem: UnitSystemPreference? = nil,
+        date: Date = Date()
+    ) {
         let ingredientMap = Dictionary(uniqueKeysWithValues: recipe.ingredients.map { ($0.id, $0) })
         id = UUID().uuidString
         recipeID = recipe.id
@@ -99,6 +108,13 @@ public struct CookSession: Codable, Hashable, Identifiable, Sendable {
         startedAt = date
         updatedAt = date
         endedAt = nil
+        self.servings = servings
+        self.unitSystem = unitSystem
+    }
+
+    /// The share of stages finished, from 0 to 1.
+    public var progress: Double {
+        stages.isEmpty ? 0 : Double(completedStageIDs.count) / Double(stages.count)
     }
 
     public var isComplete: Bool {
@@ -136,12 +152,24 @@ public actor CookSessionStore {
         self.fileURL = fileURL ?? Self.defaultFileURL()
     }
 
-    public func createSession(for recipe: RecipeV1, date: Date = Date()) throws -> CookSession {
+    public func createSession(
+        for recipe: RecipeV1,
+        servings: Decimal? = nil,
+        unitSystem: UnitSystemPreference? = nil,
+        date: Date = Date()
+    ) throws -> CookSession {
         var all = try loadIfNeeded()
-        if let existing = all.values.first(where: { $0.recipeID == recipe.id && $0.endedAt == nil }) {
+        if var existing = all.values.first(where: { $0.recipeID == recipe.id && $0.endedAt == nil }) {
+            // Resuming keeps progress, but follows the servings and units the cook chose this time.
+            guard existing.servings != servings || existing.unitSystem != unitSystem else { return existing }
+            existing.servings = servings
+            existing.unitSystem = unitSystem
+            existing.updatedAt = date
+            all[existing.id] = existing
+            try persist(all)
             return existing
         }
-        let session = CookSession(recipe: recipe, date: date)
+        let session = CookSession(recipe: recipe, servings: servings, unitSystem: unitSystem, date: date)
         all[session.id] = session
         try persist(all)
         return session

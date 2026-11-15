@@ -30,7 +30,8 @@ struct DocumentScannerView: UIViewControllerRepresentable {
         }
 
         func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFinishWith scan: VNDocumentCameraScan) {
-            let images = (0..<min(scan.pageCount, 4)).map { scan.imageOfPage(at: $0) }
+            // Keep one page beyond the import limit so the form can say that extra pages were left out.
+            let images = (0..<min(scan.pageCount, 5)).map { scan.imageOfPage(at: $0) }
             onCompletion(images)
         }
 

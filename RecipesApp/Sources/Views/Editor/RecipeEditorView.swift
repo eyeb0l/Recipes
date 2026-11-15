@@ -11,6 +11,8 @@ struct RecipeEditorView: View {
     let onSave: (RecipeV1) -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    /// Set only when the saved recipe can be decoded; editing anything else could overwrite it.
+    private let loadError: String?
     @State private var draft: RecipeV1
     @State private var selectedStage: StageSelection?
     @State private var validationMessage: String?
@@ -18,11 +20,41 @@ struct RecipeEditorView: View {
     init(record: RecipeRecord, onSave: @escaping (RecipeV1) -> Void) {
         self.record = record
         self.onSave = onSave
-        _draft = State(initialValue: (try? record.recipe()) ?? SampleRecipe.espressoBrownies)
+        do {
+            _draft = State(initialValue: try record.recipe())
+            loadError = nil
+        } catch {
+            _draft = State(initialValue: RecipeV1(
+                id: record.id,
+                title: record.title,
+                recipeYield: .init(servings: 1),
+                ingredients: [],
+                stages: [],
+                provenance: .init(sourceType: .manual)
+            ))
+            loadError = error.localizedDescription
+        }
     }
 
     var body: some View {
         NavigationStack {
+            if let loadError {
+                ContentUnavailableView(
+                    "This recipe can't be edited",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text(loadError)
+                )
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
+                }
+            } else {
+                editorForm
+            }
+        }
+        .editorialSurface()
+    }
+
+    private var editorForm: some View {
             Form {
                 Section("Recipe") {
                     TextField("Title", text: $draft.title)
@@ -50,7 +82,7 @@ struct RecipeEditorView: View {
                                         set: { ingredient.quantity?.unit = $0 }
                                     )) {
                                         ForEach(UnitID.allCases, id: \.self) { unit in
-                                            Text(unit.rawValue).tag(unit)
+                                            Text(unit.editorName).tag(unit)
                                         }
                                     }
                                 } else {
@@ -65,8 +97,9 @@ struct RecipeEditorView: View {
                         .padding(.vertical, 3)
                     }
                     .onDelete { offsets in
-                        draft.ingredients.remove(atOffsets: offsets)
-                        normalizeIngredientOrder()
+                        // Removing references too keeps stages, prep tasks, and warnings valid.
+                        let ids = offsets.map { draft.ingredients[$0].id }
+                        for id in ids { draft.removeIngredient(id: id) }
                     }
                     Button("Add ingredient", systemImage: "plus") { addIngredient() }
                 }
@@ -96,6 +129,10 @@ struct RecipeEditorView: View {
                         }
                     }
                     .onMove(perform: moveStages)
+                    .onDelete { offsets in
+                        let ids = offsets.map { draft.sortedStages[$0].id }
+                        for id in ids { draft.removeStage(id: id) }
+                    }
                     Button("Add stage", systemImage: "plus") { addStage() }
                 }
 
@@ -122,16 +159,18 @@ struct RecipeEditorView: View {
                 }
             }
             .navigationTitle("Edit recipe")
+            .navigationBarTitleDisplayMode(.inline)
             .environment(\.editMode, .constant(.active))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Save", action: save) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save", action: save)
+                        .primaryGlassButton()
+                }
             }
             .sheet(item: $selectedStage) { selection in
                 StageDetailEditor(recipe: $draft, stageID: selection.id)
             }
-        }
-        .editorialSurface()
     }
 
     private func save() {
@@ -306,5 +345,17 @@ private extension Binding where Value == String {
             get: { source.wrappedValue ?? defaultValue },
             set: { source.wrappedValue = $0.isEmpty ? nil : $0 }
         )
+    }
+}
+
+private extension UnitID {
+    /// A readable unit name for the editor's picker.
+    var editorName: String {
+        switch self {
+        case .none: "No unit"
+        case .count: "Count"
+        case .fluidOunce: "fl oz"
+        default: CulinaryUnits.symbol(for: self)
+        }
     }
 }

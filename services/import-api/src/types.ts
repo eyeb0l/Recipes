@@ -27,7 +27,7 @@ export interface NormalizedRecipeSource {
 
 export interface ExtractionResult {
   recipe: unknown;
-  provider: "grok" | "openai";
+  provider: "openai";
   model: string;
 }
 

@@ -41,53 +41,23 @@ final class RecipeImportClient {
 
     private(set) var state: State = .idle
 
+    /// Imports one source. Pass the same `idempotencyKey` when retrying the same import so the
+    /// service can join work that is still in flight instead of starting it again.
     func importRecipe(
         from source: RecipeImportSource,
         auth: AuthSession,
-        preferredUnits: UnitSystemPreference
+        preferredUnits: UnitSystemPreference,
+        idempotencyKey: String = UUID().uuidString
     ) async throws -> RecipeImportResponse {
         state = .importing
         do {
-            let token = try await auth.validAccessToken()
-            var request = URLRequest(url: APIConfiguration.baseURL.appending(path: "/v1/recipe-imports"))
-            request.httpMethod = "POST"
-            request.timeoutInterval = 120
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            request.setValue(UUID().uuidString, forHTTPHeaderField: "X-Request-ID")
-
-            switch source {
-            case let .url(url):
-                let metadata = RecipeImportMetadata(
-                    sourceType: "url", url: url.absoluteString, text: nil, recognizedText: nil,
-                    locale: Locale.current.identifier, preferredUnitSystem: preferredUnits.rawValue,
-                    idempotencyKey: UUID().uuidString
-                )
-                try request.setJSONBody(metadata)
-            case let .text(text):
-                let metadata = RecipeImportMetadata(
-                    sourceType: "text", url: nil, text: text, recognizedText: nil,
-                    locale: Locale.current.identifier, preferredUnitSystem: preferredUnits.rawValue,
-                    idempotencyKey: UUID().uuidString
-                )
-                try request.setJSONBody(metadata)
-            case let .images(images, recognizedText):
-                guard !images.isEmpty else { throw APIClientError.invalidSource }
-                let metadata = RecipeImportMetadata(
-                    sourceType: "images", url: nil, text: nil, recognizedText: recognizedText,
-                    locale: Locale.current.identifier, preferredUnitSystem: preferredUnits.rawValue,
-                    idempotencyKey: UUID().uuidString
-                )
-                let boundary = "RecipeTimeline-\(UUID().uuidString)"
-                request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-                request.httpBody = try MultipartBody(boundary: boundary)
-                    .addingJSON(metadata, name: "metadata")
-                    .addingImages(Array(images.prefix(4)))
-                    .data
+            let decoded: RecipeImportResponse
+            do {
+                decoded = try await send(source, token: auth.validAccessToken(), preferredUnits: preferredUnits, idempotencyKey: idempotencyKey)
+            } catch let APIClientError.rejected(status, _) where status == 401 {
+                // The access token can expire or be revoked between the local check and the request.
+                decoded = try await send(source, token: auth.validAccessToken(forceRefresh: true), preferredUnits: preferredUnits, idempotencyKey: idempotencyKey)
             }
-
-            let (data, response) = try await URLSession.shared.data(for: request)
-            try requireSuccess(data: data, response: response)
-            let decoded = try RecipeCoding.decoder.decode(RecipeImportResponse.self, from: data)
             let validation = RecipeValidator.validate(decoded.recipe)
             guard validation.isValid else {
                 throw APIClientError.rejected(
@@ -100,6 +70,63 @@ final class RecipeImportClient {
         } catch {
             state = .failed(error.localizedDescription)
             throw error
+        }
+    }
+
+    private func send(
+        _ source: RecipeImportSource,
+        token: String,
+        preferredUnits: UnitSystemPreference,
+        idempotencyKey: String
+    ) async throws -> RecipeImportResponse {
+        do {
+            var request = URLRequest(url: APIConfiguration.baseURL.appending(path: "/v1/recipe-imports"))
+            request.httpMethod = "POST"
+            request.timeoutInterval = 120
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request.setValue(UUID().uuidString, forHTTPHeaderField: "X-Request-ID")
+
+            switch source {
+            case let .url(url):
+                let metadata = RecipeImportMetadata(
+                    sourceType: "url", url: url.absoluteString, text: nil, recognizedText: nil,
+                    locale: Locale.current.identifier, preferredUnitSystem: preferredUnits.rawValue,
+                    idempotencyKey: idempotencyKey
+                )
+                try request.setJSONBody(metadata)
+            case let .text(text):
+                let metadata = RecipeImportMetadata(
+                    sourceType: "text", url: nil, text: text, recognizedText: nil,
+                    locale: Locale.current.identifier, preferredUnitSystem: preferredUnits.rawValue,
+                    idempotencyKey: idempotencyKey
+                )
+                try request.setJSONBody(metadata)
+            case let .images(images, recognizedText):
+                guard !images.isEmpty else { throw APIClientError.invalidSource }
+                let metadata = RecipeImportMetadata(
+                    sourceType: "images", url: nil, text: nil, recognizedText: recognizedText,
+                    locale: Locale.current.identifier, preferredUnitSystem: preferredUnits.rawValue,
+                    idempotencyKey: idempotencyKey
+                )
+                let boundary = "RecipeTimeline-\(UUID().uuidString)"
+                request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+                request.httpBody = try MultipartBody(boundary: boundary)
+                    .addingJSON(metadata, name: "metadata")
+                    .addingImages(Array(images.prefix(4)))
+                    .data
+            }
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            try requireSuccess(data: data, response: response)
+            do {
+                return try RecipeCoding.decoder.decode(RecipeImportResponse.self, from: data)
+            } catch {
+                throw APIClientError.invalidResponse
+            }
+        } catch let error as URLError where error.code == .timedOut {
+            throw APIClientError.rejected(status: 504, message: "Reading the recipe took too long. Check your connection and try again.")
+        } catch let error as URLError where error.code == .notConnectedToInternet || error.code == .networkConnectionLost {
+            throw APIClientError.rejected(status: 0, message: "You're offline. Connect to the internet to import a recipe.")
         }
     }
 }

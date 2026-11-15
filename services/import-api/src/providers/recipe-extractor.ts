@@ -3,7 +3,7 @@ import { APIError } from "../errors";
 import type { ExtractionResult, NormalizedRecipeSource } from "../types";
 
 export interface RecipeExtractor {
-  readonly provider: "grok" | "openai";
+  readonly provider: "openai";
   readonly model: string;
   extract(source: NormalizedRecipeSource, requestID: string): Promise<ExtractionResult>;
 }

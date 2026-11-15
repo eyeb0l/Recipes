@@ -55,13 +55,9 @@ struct FocusedStepList: View {
             stageMetadata(stage)
         }
         .padding(.horizontal, 18)
-        .padding(.vertical, 15)
+        .padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RecipeTheme.surface, in: RoundedRectangle(cornerRadius: 14))
-        .overlay {
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(RecipeTheme.grid)
-        }
+        .paperCard(cornerRadius: 20)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel(for: stage, ingredients: ingredients, warnings: warnings))
     }
@@ -86,12 +82,14 @@ struct FocusedStepList: View {
     }
 
     private func stageTitle(_ stage: Stage) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
+        HStack(alignment: .center, spacing: 12) {
             Text("\(stage.sortIndex + 1)")
                 .font(.subheadline.monospacedDigit().weight(.bold))
                 .foregroundStyle(RecipeTheme.focusText)
+                .frame(minWidth: 28, minHeight: 28)
+                .background(RecipeTheme.focus.opacity(0.12), in: Circle())
             Text(stage.action)
-                .font(.title3.weight(.semibold))
+                .font(RecipeTheme.display(.title3))
                 .foregroundStyle(RecipeTheme.ink)
                 .fixedSize(horizontal: false, vertical: true)
                 .layoutPriority(1)
@@ -132,7 +130,7 @@ struct FocusedStepList: View {
         .padding(.vertical, 9)
         .padding(.horizontal, 13)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RecipeTheme.focus.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+        .background(RecipeTheme.focus.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(alignment: .leading) {
             Capsule()
                 .fill(RecipeTheme.focus)

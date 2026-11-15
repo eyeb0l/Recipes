@@ -11,6 +11,8 @@ struct CookModeHost: View {
     @State private var session: CookSession?
     @State private var recipe: RecipeV1?
     @State private var errorMessage: String?
+    @State private var isConfirmingEnd = false
+    @State private var endError: String?
 
     var body: some View {
         NavigationStack {
@@ -35,7 +37,24 @@ struct CookModeHost: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close", systemImage: "xmark", action: exit)
+                        .accessibilityHint("Keeps your progress and timers so you can come back")
                 }
+                if let session, session.endedAt == nil {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("End cooking", systemImage: "stop.circle") { isConfirmingEnd = true }
+                            .accessibilityIdentifier("end-cooking")
+                    }
+                }
+            }
+            .confirmationDialog("End cooking?", isPresented: $isConfirmingEnd, titleVisibility: .visible) {
+                Button("End cooking", role: .destructive) { Task { await endSession() } }
+            } message: {
+                Text("Your progress and running timers for this recipe will be cleared.")
+            }
+            .alert("Couldn't end cooking", item: $endError) { _ in
+                Button("OK", role: .cancel) {}
+            } message: { message in
+                Text(message)
             }
         }
         .editorialSurface()
@@ -52,6 +71,19 @@ struct CookModeHost: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func endSession() async {
+        guard let session else { return exit() }
+        do {
+            try await CookSessionStore.shared.end(sessionID: session.id)
+        } catch {
+            endError = error.localizedDescription
+            return
+        }
+        await CookTimerNotifications.cancelAll(session: session)
+        await CookActivityController.end(session: session)
+        exit()
     }
 
     private func exit() {

@@ -11,6 +11,7 @@
 		03EF879CEC8F7D78AAF4245A /* TimelineLayoutEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 517ED980A8906346E3F28752 /* TimelineLayoutEngine.swift */; };
 		058DEAC2F7F98DD73EF5C568 /* RecipeTimelineUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93EE29C768C73BD46B02BF87 /* RecipeTimelineUITests.swift */; };
 		0B291595FF7BDD1138073F81 /* RecipeImportClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 167E3BE2DE8B4ABE5019630D /* RecipeImportClient.swift */; };
+		0CEE1FB57B3D69EE79EE383E /* RecipeInsights.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D8FCDB4F50A7245CC883D31 /* RecipeInsights.swift */; };
 		10A4E42594FA16841FEF1CBD /* RecipeRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4348886AE4765AC62AB14065 /* RecipeRecord.swift */; };
 		251091C3B3CEA6BBA0A08C5F /* RecipeCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E8AEFB118B3577BD75D51B02 /* RecipeCore.framework */; };
 		287C62D7A65812386F9F8D85 /* RecipeTimelineApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB76BEBA1EB9F1AE71ACE481 /* RecipeTimelineApp.swift */; };
@@ -162,6 +163,7 @@
 		83A9E16988079B36E1D9D6ED /* CookActivityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookActivityController.swift; sourceTree = "<group>"; };
 		8AD6B0554794565E32D5D21A /* CookSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookSession.swift; sourceTree = "<group>"; };
 		8B8236973BF3BA27C9E440AD /* CookActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookActivityAttributes.swift; sourceTree = "<group>"; };
+		8D8FCDB4F50A7245CC883D31 /* RecipeInsights.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeInsights.swift; sourceTree = "<group>"; };
 		93EE29C768C73BD46B02BF87 /* RecipeTimelineUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeTimelineUITests.swift; sourceTree = "<group>"; };
 		9A44532C3ABB2F266887ED3C /* RecipeSchemaMigrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeSchemaMigrator.swift; sourceTree = "<group>"; };
 		AE1335BFB52C99A161C55AC4 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -331,6 +333,7 @@
 				83A9E16988079B36E1D9D6ED /* CookActivityController.swift */,
 				7B09FA8C23A0D6BB61E24FBD /* CookIntents.swift */,
 				8AD6B0554794565E32D5D21A /* CookSession.swift */,
+				8D8FCDB4F50A7245CC883D31 /* RecipeInsights.swift */,
 				13821CEDAE9B4DAAC2602068 /* RecipeModels.swift */,
 				9A44532C3ABB2F266887ED3C /* RecipeSchemaMigrator.swift */,
 				228C4B4A6FAB4B68CB511593 /* RecipeValidator.swift */,
@@ -659,6 +662,7 @@
 				53734A2A9805712AE569A5AF /* CookActivityController.swift in Sources */,
 				B5FC8D3ADDE0F78AA3571363 /* CookIntents.swift in Sources */,
 				327426454EDF140C4F769E02 /* CookSession.swift in Sources */,
+				0CEE1FB57B3D69EE79EE383E /* RecipeInsights.swift in Sources */,
 				8B133D973FAA84E1D0EC1DD9 /* RecipeModels.swift in Sources */,
 				33206EC12850E66C817670E2 /* RecipeSchemaMigrator.swift in Sources */,
 				836D248735BC87F8C9FE856A /* RecipeValidator.swift in Sources */,
@@ -896,7 +900,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 359794K46A;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -918,8 +922,8 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				ICLOUD_CONTAINER_IDENTIFIER = iCloud.com.irisgiertuga.RecipeTimeline;
 				IMPORT_API_BASE_URL = "https://recipe-timeline-import-api.iris-account.workers.dev";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.1;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1008,7 +1012,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 359794K46A;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -1024,8 +1028,8 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				ICLOUD_CONTAINER_IDENTIFIER = iCloud.com.irisgiertuga.RecipeTimeline;
 				IMPORT_API_BASE_URL = "https://recipe-timeline-import-api.iris-account.workers.dev";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

@@ -32,12 +32,21 @@ struct ImportRecipeView: View {
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var captureSheet: CaptureSheet?
     @State private var isFileImporterPresented = false
-    @State private var preferredUnits: UnitSystemPreference = .metric
+    @AppStorage(AppPreferenceKey.unitSystem) private var preferredUnits: UnitSystemPreference = .metric
     @State private var errorMessage: String?
+    @State private var pageNotice: String?
+    /// Reused when the same import is retried so the service can join in-flight work.
+    @State private var attemptKey: String?
+    @State private var ignoresNextPhotoChange = false
+
+    /// The server needs this much pasted text before it will attempt an extraction.
+    static let minimumPastedTextLength = 40
+    static let maximumPageCount = 4
 
     var body: some View {
         NavigationStack {
             Form {
+                Group {
                 Section {
                     Picker("Source", selection: $kind) {
                         ForEach(ImportKind.allCases) { Text($0.rawValue).tag($0) }
@@ -49,9 +58,7 @@ struct ImportRecipeView: View {
 
                 Section("Units") {
                     Picker("Units", selection: $preferredUnits) {
-                        Text("As written").tag(UnitSystemPreference.source)
-                        Text("Metric").tag(UnitSystemPreference.metric)
-                        Text("Imperial").tag(UnitSystemPreference.imperial)
+                        ForEach(UnitSystemPreference.allCases, id: \.self) { Text($0.displayName).tag($0) }
                     }
                     .pickerStyle(.segmented)
                     Text("The app keeps the original amounts. You can change display units or servings later.")
@@ -61,6 +68,11 @@ struct ImportRecipeView: View {
 
                 if !auth.isAuthenticated {
                     Section("Sign in to import") {
+                        if case let .failed(message) = auth.state {
+                            Label(message, systemImage: "exclamationmark.triangle.fill")
+                                .font(.footnote)
+                                .foregroundStyle(RecipeTheme.warning)
+                        }
                         Text("Sign in with Apple to import recipes. The app saves them to your recipe library.")
                             .font(.footnote)
                         SignInWithAppleButton(.continue) { _ in
@@ -78,6 +90,8 @@ struct ImportRecipeView: View {
                             .foregroundStyle(RecipeTheme.warning)
                     }
                 }
+                }
+                .listRowBackground(RecipeTheme.surface)
             }
             .scrollContentBackground(.hidden)
             .background(RecipeTheme.paper)
@@ -97,8 +111,10 @@ struct ImportRecipeView: View {
                         RecipeTheme.paper.opacity(0.86).ignoresSafeArea()
                         VStack(spacing: 14) {
                             ProgressView()
-                            Text("Reading your recipe…")
-                                .font(.headline)
+                                .controlSize(.large)
+                                .tint(RecipeTheme.focus)
+                            Text(progressTitle)
+                                .font(RecipeTheme.display(.title3))
                             Text("The app checks the ingredients and steps before saving your recipe.")
                                 .font(.footnote)
                                 .foregroundStyle(RecipeTheme.secondaryInk)
@@ -112,7 +128,7 @@ struct ImportRecipeView: View {
                 switch sheet {
                 case .scanner:
                     DocumentScannerView { images in
-                        capturedImages = images
+                        setCapturedImages(images, clearingPhotoSelection: true)
                         captureSheet = nil
                     } onCancel: {
                         captureSheet = nil
@@ -121,8 +137,14 @@ struct ImportRecipeView: View {
                 }
             }
             .onChange(of: photoItems) { _, newItems in
+                if ignoresNextPhotoChange {
+                    // Clearing the picker after a scan or Files import must not wipe those pages.
+                    ignoresNextPhotoChange = false
+                    return
+                }
                 Task { await loadPhotoItems(newItems) }
             }
+            .onChange(of: importFingerprint) { attemptKey = nil }
             .fileImporter(
                 isPresented: $isFileImporterPresented,
                 allowedContentTypes: [.pdf, .image],
@@ -138,11 +160,22 @@ struct ImportRecipeView: View {
         switch kind {
         case .url:
             Section("Recipe URL") {
-                TextField("https://example.com/recipe", text: $urlText)
-                    .keyboardType(.URL)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .accessibilityIdentifier("recipe-url")
+                HStack(spacing: 10) {
+                    TextField("https://example.com/recipe", text: $urlText)
+                        .keyboardType(.URL)
+                        .textContentType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .submitLabel(.go)
+                        .onSubmit { if canImport { Task { await importRecipe() } } }
+                        .accessibilityIdentifier("recipe-url")
+                    PasteButton(payloadType: String.self) { strings in
+                        guard let pasted = strings.first?.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
+                        urlText = pasted
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonBorderShape(.capsule)
+                }
                 Text("The importer reads recipe data from the page. If it can't find any, it reads the recipe text.")
                     .font(.footnote)
                     .foregroundStyle(RecipeTheme.secondaryInk)
@@ -153,9 +186,23 @@ struct ImportRecipeView: View {
                     .frame(minHeight: 220)
                     .font(.body)
                     .accessibilityIdentifier("recipe-text")
-                Text("Paste the ingredient list and full method. The app flags anything unclear for you to review.")
-                    .font(.footnote)
-                    .foregroundStyle(RecipeTheme.secondaryInk)
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Paste the ingredient list and full method. The app flags anything unclear for you to review.")
+                        .font(.footnote)
+                        .foregroundStyle(RecipeTheme.secondaryInk)
+                    Spacer(minLength: 8)
+                    PasteButton(payloadType: String.self) { strings in
+                        guard let pasted = strings.first else { return }
+                        pastedText = pasted
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonBorderShape(.capsule)
+                }
+                if pastedTextIsTooShort {
+                    Text("Add a little more: the recipe needs at least \(Self.minimumPastedTextLength) characters.")
+                        .font(.footnote)
+                        .foregroundStyle(RecipeTheme.warning)
+                }
             }
         case .images:
             Section("Cookbook pages") {
@@ -167,14 +214,27 @@ struct ImportRecipeView: View {
                     } else {
                         ScrollView(.horizontal) {
                             HStack(spacing: 10) {
-                                ForEach(Array(capturedImages.enumerated()), id: \.offset) { _, image in
+                                ForEach(Array(capturedImages.enumerated()), id: \.offset) { index, image in
                                     Image(uiImage: image)
                                         .resizable()
                                         .scaledToFill()
                                         .frame(width: 90, height: 120)
-                                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                        .overlay(alignment: .topTrailing) {
+                                            Button("Remove page \(index + 1)", systemImage: "xmark.circle.fill") {
+                                                removePage(at: index)
+                                            }
+                                            .labelStyle(.iconOnly)
+                                            .font(.title3)
+                                            .symbolRenderingMode(.palette)
+                                            .foregroundStyle(.white, .black.opacity(0.55))
+                                            .buttonStyle(.borderless)
+                                            .padding(4)
+                                        }
+                                        .accessibilityLabel("Page \(index + 1)")
                                 }
                             }
+                            .padding(.vertical, 2)
                         }
                         Label(
                             "\(capturedImages.count) page\(capturedImages.count == 1 ? "" : "s") ready",
@@ -182,6 +242,11 @@ struct ImportRecipeView: View {
                         )
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(RecipeTheme.success)
+                        if let pageNotice {
+                            Text(pageNotice)
+                                .font(.footnote)
+                                .foregroundStyle(RecipeTheme.warning)
+                        }
                     }
                 }
                 .padding(.vertical, 2)
@@ -266,11 +331,65 @@ struct ImportRecipeView: View {
 
     private var canImport: Bool {
         switch kind {
-        case .url:
-            guard let scheme = URL(string: urlText)?.scheme?.lowercased() else { return false }
-            return scheme == "http" || scheme == "https"
-        case .text: return pastedText.trimmingCharacters(in: .whitespacesAndNewlines).count >= 30
+        case .url: return Self.normalizedRecipeURL(from: urlText) != nil
+        case .text: return pastedText.trimmingCharacters(in: .whitespacesAndNewlines).count >= Self.minimumPastedTextLength
         case .images: return !capturedImages.isEmpty
+        }
+    }
+
+    private var pastedTextIsTooShort: Bool {
+        let count = pastedText.trimmingCharacters(in: .whitespacesAndNewlines).count
+        return count > 0 && count < Self.minimumPastedTextLength
+    }
+
+    private var progressTitle: String {
+        switch kind {
+        case .url: "Reading the recipe page…"
+        case .text: "Reading your recipe…"
+        case .images: capturedImages.count == 1 ? "Reading your page…" : "Reading your pages…"
+        }
+    }
+
+    /// Changes whenever the content to import changes, so a retry of the same content keeps its key.
+    private var importFingerprint: String {
+        switch kind {
+        case .url: "url:\(urlText)"
+        case .text: "text:\(pastedText)"
+        case .images: "images:\(capturedImages.map { ObjectIdentifier($0).hashValue })"
+        }
+    }
+
+    /// Accepts pasted links with surrounding whitespace or without a scheme, such as "example.com/recipe".
+    static func normalizedRecipeURL(from text: String) -> URL? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.contains(where: \.isWhitespace) else { return nil }
+        let candidate = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
+        guard let url = URL(string: candidate),
+              let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
+              let host = url.host(), host.contains(".")
+        else { return nil }
+        return url
+    }
+
+    private func setCapturedImages(_ images: [UIImage], clearingPhotoSelection: Bool) {
+        capturedImages = Array(images.prefix(Self.maximumPageCount))
+        pageNotice = images.count > Self.maximumPageCount
+            ? "Only the first \(Self.maximumPageCount) pages will be read."
+            : nil
+        errorMessage = nil
+        if clearingPhotoSelection, !photoItems.isEmpty {
+            ignoresNextPhotoChange = true
+            photoItems = []
+        }
+    }
+
+    private func removePage(at index: Int) {
+        guard capturedImages.indices.contains(index) else { return }
+        capturedImages.remove(at: index)
+        pageNotice = nil
+        if !photoItems.isEmpty {
+            ignoresNextPhotoChange = true
+            photoItems = []
         }
     }
 
@@ -280,7 +399,7 @@ struct ImportRecipeView: View {
             let source: RecipeImportSource
             switch kind {
             case .url:
-                guard let url = URL(string: urlText) else { throw APIClientError.invalidSource }
+                guard let url = Self.normalizedRecipeURL(from: urlText) else { throw APIClientError.invalidSource }
                 source = .url(url)
             case .text:
                 source = .text(pastedText)
@@ -289,8 +408,16 @@ struct ImportRecipeView: View {
                 let recognized = await CookbookOCR.recognizeText(in: data)
                 source = .images(data, recognizedText: recognized)
             }
-            let response = try await client.importRecipe(from: source, auth: auth, preferredUnits: preferredUnits)
+            let key = attemptKey ?? UUID().uuidString
+            attemptKey = key
+            let response = try await client.importRecipe(
+                from: source,
+                auth: auth,
+                preferredUnits: preferredUnits,
+                idempotencyKey: key
+            )
             try save(response.recipe)
+            attemptKey = nil
             router.selectedRecipeID = response.recipe.id
             dismiss()
         } catch {
@@ -310,19 +437,27 @@ struct ImportRecipeView: View {
 
     private func loadPhotoItems(_ items: [PhotosPickerItem]) async {
         var images: [UIImage] = []
-        for item in items.prefix(4) {
+        var unreadable = 0
+        for item in items.prefix(Self.maximumPageCount) {
             if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) {
                 images.append(image)
+            } else {
+                unreadable += 1
             }
         }
-        capturedImages = images
+        // A newer selection may have replaced this one while photos were loading.
+        guard items == photoItems else { return }
+        setCapturedImages(images, clearingPhotoSelection: false)
+        if unreadable > 0 {
+            errorMessage = unreadable == 1
+                ? "One photo couldn't be opened. Try choosing it again or use a different photo."
+                : "\(unreadable) photos couldn't be opened. Try choosing them again or use different photos."
+        }
     }
 
     private func loadFiles(_ result: Result<[URL], Error>) {
         do {
-            capturedImages = try CookbookFileImporter.images(from: result.get())
-            photoItems = []
-            errorMessage = nil
+            setCapturedImages(try CookbookFileImporter.images(from: result.get()), clearingPhotoSelection: true)
         } catch CocoaError.userCancelled {
             // Leaving the picker should not surface an error.
         } catch {
