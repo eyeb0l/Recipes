@@ -240,6 +240,44 @@ describe("import API", () => {
     expect(quotaValue()).toBe("1");
   });
 
+  it("lets a retry join in-flight work that used the last daily import", async () => {
+    const env = testEnv();
+    const kv = env.SESSIONS as unknown as MemoryKV;
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("opaque-apple-subject"));
+    const subject = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const quotaKey = `quota:${new Date().toISOString().slice(0, 10)}:${subject}`;
+    kv.values.set(quotaKey, "19");
+    let release: () => void = () => undefined;
+    const extract = vi.fn();
+    const fetcher = vi.fn(async () => new Response(`<script type="application/ld+json">${JSON.stringify({
+      "@type": "Recipe", name: "Pancakes", recipeYield: "2", recipeIngredient: ["100 g flour"], recipeInstructions: ["Mix and cook."]
+    })}</script>`, { headers: { "Content-Type": "text/html" } }));
+    const app = createApp({ verifyApple: async () => "opaque-apple-subject", fetcher, resolver: publicResolver, extractorFactory: () => ({ provider: "openai", model: "gpt-6.1-terra", extract }) });
+    const token = await accessToken(app, env);
+
+    for (const request of [importRequest, urlImportRequest]) {
+      kv.values.set(quotaKey, "19");
+      const pending = new Promise<void>((resolve) => { release = resolve; });
+      extract.mockReset();
+      extract.mockImplementation(async () => {
+        await pending;
+        return { recipe: validRecipe(), provider: "openai" as const, model: "gpt-6.1-terra" };
+      });
+      const key = `last-import-${request.name}`;
+      const first = app.request("/v1/recipe-imports", request(token, key), env);
+      await vi.waitFor(() => expect(extract).toHaveBeenCalledTimes(1));
+      expect(kv.values.get(quotaKey)).toBe("20");
+      const retry = app.request("/v1/recipe-imports", request(token, key), env);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      release();
+      const [firstResponse, retryResponse] = await Promise.all([first, retry]);
+      expect(firstResponse.status).toBe(200);
+      expect(retryResponse.status).toBe(200);
+      expect(extract).toHaveBeenCalledTimes(1);
+      expect(kv.values.get(quotaKey)).toBe("20");
+    }
+  });
+
   it("rejects work once the daily allowance is used without fetching the source or calling the provider", async () => {
     const env = testEnv();
     const extract = vi.fn();

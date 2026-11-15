@@ -228,6 +228,7 @@ public actor CookSessionStore {
     @discardableResult
     public func setPrepTask(_ taskID: String, completed: Bool, sessionID: String, date: Date = Date()) throws -> CookSession {
         try update(sessionID: sessionID) { session in
+            try Self.requireActive(session)
             if completed { session.completedPrepTaskIDs.insert(taskID) } else { session.completedPrepTaskIDs.remove(taskID) }
             session.updatedAt = date
         }
@@ -236,6 +237,7 @@ public actor CookSessionStore {
     @discardableResult
     public func focus(stageID: String, sessionID: String, date: Date = Date()) throws -> CookSession {
         try update(sessionID: sessionID) { session in
+            try Self.requireActive(session)
             guard session.readyStageIDs.contains(stageID) else { return }
             session.focusedStageID = stageID
             session.updatedAt = date
@@ -249,6 +251,7 @@ public actor CookSessionStore {
                 throw CookSessionError.unknownStage
             }
             guard !session.completedStageIDs.contains(stageID) else { return }
+            try Self.requireActive(session)
             guard session.readyStageIDs.contains(stageID) else {
                 throw CookSessionError.blockedStage
             }
@@ -267,6 +270,8 @@ public actor CookSessionStore {
         date: Date = Date()
     ) throws -> CookSession {
         try update(sessionID: sessionID) { session in
+            // A Live Activity intent queued before the cook ended the session must not restart a timer.
+            try Self.requireActive(session)
             let compositeID = "\(stageID):\(timer.id)"
             guard let stage = session.stages.first(where: { $0.id == stageID }),
                   stage.timers.contains(where: { $0.id == timer.id }) else {
@@ -316,6 +321,7 @@ public actor CookSessionStore {
     @discardableResult
     public func cancelTimer(timerID: String, sessionID: String, date: Date = Date()) throws -> CookSession {
         try update(sessionID: sessionID) { session in
+            try Self.requireActive(session)
             guard let index = session.timers.firstIndex(where: { $0.id == timerID }) else {
                 throw CookSessionError.unknownTimer
             }
@@ -350,6 +356,10 @@ public actor CookSessionStore {
                 session.timers[index].endDate = nil
             }
         }
+    }
+
+    private static func requireActive(_ session: CookSession) throws {
+        guard session.endedAt == nil else { throw CookSessionError.sessionEnded }
     }
 
     private func update(sessionID: String, mutation: (inout CookSession) throws -> Void) throws -> CookSession {
@@ -395,6 +405,7 @@ public enum CookSessionError: Error, LocalizedError, Equatable {
     case unknownStage
     case blockedStage
     case unknownTimer
+    case sessionEnded
 
     public var errorDescription: String? {
         switch self {
@@ -402,6 +413,7 @@ public enum CookSessionError: Error, LocalizedError, Equatable {
         case .unknownStage: "This stage is not part of the cook session."
         case .blockedStage: "Complete the stages this step depends on first."
         case .unknownTimer: "This timer is not part of the cook session."
+        case .sessionEnded: "This cooking session has ended."
         }
     }
 }

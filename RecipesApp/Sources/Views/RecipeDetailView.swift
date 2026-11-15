@@ -25,6 +25,7 @@ struct RecipeDetailView: View {
     let record: RecipeRecord
     @Environment(AppRouter.self) private var router
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @AppStorage(AppPreferenceKey.unitSystem) private var units: UnitSystemPreference = .metric
     @State private var recipe: RecipeV1?
@@ -366,8 +367,8 @@ struct RecipeDetailView: View {
             }
             .primaryGlassButton()
             .controlSize(.extraLarge)
-            // The floating button must not cover most of a landscape iPhone at the largest text sizes.
-            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+            // In compact height (landscape iPhone) the floating button must not cover most of the screen.
+            .dynamicTypeSize(verticalSizeClass == .compact ? ...DynamicTypeSize.accessibility1 : ...DynamicTypeSize.accessibility5)
             .accessibilityIdentifier("start-cooking")
         }
         .frame(maxWidth: .infinity, alignment: horizontalSizeClass == .compact ? .center : .trailing)

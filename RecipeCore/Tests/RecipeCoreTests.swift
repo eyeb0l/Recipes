@@ -385,6 +385,16 @@ final class RecipeCoreTests: XCTestCase {
         XCTAssertTrue(ended.timers.allSatisfy { $0.status == .cancelled && $0.endDate == nil })
         let active = try await store.activeSession(for: recipe.id)
         XCTAssertNil(active)
+
+        // A timer intent queued from the Live Activity before the end must not restart anything.
+        do {
+            _ = try await store.toggleTimer(sessionID: session.id, stageID: "melt", timer: timer)
+            XCTFail("An ended session must reject timer changes")
+        } catch let error as CookSessionError {
+            XCTAssertEqual(error, .sessionEnded)
+        }
+        let afterIntent = try await store.session(id: session.id)
+        XCTAssertEqual(afterIntent?.runningTimerCount, 0)
     }
 
     func testCookSessionsSavedBeforeScalingWasStoredStillDecode() throws {

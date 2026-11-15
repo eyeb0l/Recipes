@@ -48,6 +48,7 @@ public struct ToggleCookTimerIntent: LiveActivityIntent {
 
     public func perform() async throws -> some IntentResult {
         guard let current = try await CookSessionStore.shared.session(id: sessionID),
+              current.endedAt == nil,
               let stage = current.stages.first(where: { $0.id == stageID }),
               let timer = stage.timers.first(where: { "\(stageID):\($0.id)" == timerID }) else {
             return .result()
@@ -69,6 +70,11 @@ public enum CookTimerNotifications {
     }
 
     public static func sync(session: CookSession) async {
+        // An abandoned session must never schedule alerts, even from a stale snapshot.
+        if session.endedAt != nil, !session.isComplete {
+            await cancelAll(session: session)
+            return
+        }
         let center = UNUserNotificationCenter.current()
         let knownIDs = session.timers.map { notificationID(sessionID: session.id, timerID: $0.id) }
         center.removePendingNotificationRequests(withIdentifiers: knownIDs)

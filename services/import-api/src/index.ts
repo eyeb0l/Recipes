@@ -58,15 +58,18 @@ export function createApp(dependencies: AppDependencies = {}) {
     const quota = await context.env.IMPORT_RATE_LIMITER.limit({ key: quotaKey });
     if (!quota.success) throw new APIError(429, "rate_limited", "Too many imports were started at once. Try again shortly.");
 
-    // Reject an exhausted allowance before fetching any source; the allowance is only spent below.
-    await assertDailyQuotaAvailable(context.env, quotaKey);
     // Invalid sources and retries that join in-flight work never reach the provider, so they don't use the daily allowance.
-    // Outbound page fetches have their own allowance, so failed URL imports can't fetch without limit.
+    // New URL imports are checked against the allowance before fetching, and outbound page fetches have
+    // their own daily cap, so failed links can't fetch without limit.
     const prepared = await prepareImportRequest(
       context.req.raw,
       dependencies.fetcher,
       dependencies.resolver,
-      () => consumeDailyFetchAllowance(context.env, quotaKey)
+      async (metadata) => {
+        if (inFlightImports.has(`${quotaKey}:${metadata.idempotencyKey}`)) return;
+        await assertDailyQuotaAvailable(context.env, quotaKey);
+        await consumeDailyFetchAllowance(context.env, quotaKey);
+      }
     );
     const dedupeKey = `${quotaKey}:${prepared.metadata.idempotencyKey}`;
     let work = inFlightImports.get(dedupeKey);

@@ -18,7 +18,7 @@ export async function prepareImportRequest(
   request: Request,
   fetcher: Fetcher = fetch,
   resolver?: HostResolver,
-  beforeURLFetch?: () => Promise<void>
+  beforeURLFetch?: (metadata: ImportMetadata) => Promise<void>
 ): Promise<PreparedImport> {
   const declaredLength = Number(request.headers.get("Content-Length") ?? 0);
   if (declaredLength > maxTotalImageBytes + maxJSONBytes) throw new APIError(413, "request_too_large", "The import request is too large.");
@@ -55,7 +55,7 @@ export async function prepareImportRequest(
   validateMetadata(metadata, images.length);
   const importedAt = new Date().toISOString();
   if (metadata.sourceType === "url") {
-    await beforeURLFetch?.();
+    await beforeURLFetch?.(metadata);
     const page = await fetchPublicRecipe(metadata.url!, fetcher, resolver ?? undefined);
     const extracted = extractRecipeFromHTML(page.contentType.includes("json") ? `<script type="application/ld+json">${page.body}</script>` : page.body);
     if (isGenericLandingRedirect(metadata.url!, page.finalURL)) {
