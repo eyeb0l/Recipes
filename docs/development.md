@@ -23,6 +23,8 @@ xcodebuild -project RecipeTimeline.xcodeproj \
   CODE_SIGNING_ALLOWED=NO build
 ```
 
+Unsigned builds have no iCloud or App Group entitlements, so they keep the recipe library on the device and Settings says so. Signed builds, including Xcode's "Sign to Run Locally" simulator builds, sync through iCloud.
+
 `RecipeTimeline.xcodeproj` is committed and generated from `project.yml`. Edit `project.yml`, run `xcodegen generate`, and commit both; CI fails if they drift apart.
 
 ### Signing and identifiers

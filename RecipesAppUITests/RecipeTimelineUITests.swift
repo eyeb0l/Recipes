@@ -206,6 +206,22 @@ final class RecipeTimelineUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["cook-mode-title"].waitForExistence(timeout: 2))
     }
 
+    func testLaunchingWithRealStorageDoesNotCrash() {
+        // Without `--ui-testing` the app uses its real recipe store, as it does when iOS launches it
+        // in the background. Unsigned builds used to trap a few seconds later while setting up CloudKit.
+        let app = XCUIApplication()
+        app.launch()
+
+        let settings = app.buttons["Settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        settings.tap()
+        let storage = app.staticTexts["Storage"]
+        XCTAssertTrue(storage.waitForExistence(timeout: 5))
+        attachScreenshot(named: "settings-real-storage")
+
+        XCTAssertFalse(app.wait(for: .notRunning, timeout: 10), "The app quit while setting up recipe storage")
+    }
+
     private func launchSampleApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing"]
