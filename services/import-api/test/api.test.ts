@@ -241,7 +241,8 @@ describe("import API", () => {
   });
 
   it("lets a retry join in-flight work that used the last daily import", async () => {
-    const env = testEnv();
+    const limit = vi.fn(async () => ({ success: true }));
+    const env = testEnv({ IMPORT_RATE_LIMITER: { limit } });
     const kv = env.SESSIONS as unknown as MemoryKV;
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("opaque-apple-subject"));
     const subject = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -259,6 +260,8 @@ describe("import API", () => {
       kv.values.set(quotaKey, "19");
       const pending = new Promise<void>((resolve) => { release = resolve; });
       extract.mockReset();
+      limit.mockClear();
+      fetcher.mockClear();
       extract.mockImplementation(async () => {
         await pending;
         return { recipe: validRecipe(), provider: "openai" as const, model: "gpt-6.1-terra" };
@@ -268,7 +271,11 @@ describe("import API", () => {
       await vi.waitFor(() => expect(extract).toHaveBeenCalledTimes(1));
       expect(kv.values.get(quotaKey)).toBe("20");
       const retry = app.request("/v1/recipe-imports", request(token, key), env);
-      await new Promise((resolve) => setTimeout(resolve, 5));
+      // Hold the first import open until the retry is past admission (and, for links, its page fetch),
+      // then leave a margin for it to join; a fixed short delay flaked on loaded machines.
+      await vi.waitFor(() => expect(limit).toHaveBeenCalledTimes(2));
+      if (request === urlImportRequest) await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+      await new Promise((resolve) => setTimeout(resolve, 50));
       release();
       const [firstResponse, retryResponse] = await Promise.all([first, retry]);
       expect(firstResponse.status).toBe(200);

@@ -24,6 +24,13 @@ struct PersistenceController {
             return makeContainer(schema: schema, configuration: configuration, mode: .inMemory)
         }
 
+        // CloudKit traps rather than throwing when the app is missing its iCloud entitlement, as unsigned
+        // simulator builds are. Those builds also lack the App Group entitlement from the same entitlements
+        // file, so a missing App Group container means CloudKit can't be set up safely.
+        guard hasAppGroupContainer() else {
+            return makeLocalStore(schema: schema, reason: "This build isn't signed with iCloud access.")
+        }
+
         let identifier = Bundle.main.object(forInfoDictionaryKey: "ICloudContainerIdentifier") as? String
             ?? "iCloud.com.irisgiertuga.RecipeTimeline"
         let cloudConfiguration = ModelConfiguration(
@@ -34,16 +41,25 @@ struct PersistenceController {
         do {
             return .init(container: try ModelContainer(for: schema, configurations: [cloudConfiguration]), mode: .iCloud, setupError: nil)
         } catch {
-            let localConfiguration = ModelConfiguration("RecipesLocal", schema: schema, cloudKitDatabase: .none)
-            do {
-                return .init(
-                    container: try ModelContainer(for: schema, configurations: [localConfiguration]),
-                    mode: .localFallback,
-                    setupError: error.localizedDescription
-                )
-            } catch {
-                fatalError("Unable to initialize recipe storage: \(error)")
-            }
+            return makeLocalStore(schema: schema, reason: error.localizedDescription)
+        }
+    }
+
+    private static func hasAppGroupContainer() -> Bool {
+        guard let group = Bundle.main.object(forInfoDictionaryKey: "AppGroupIdentifier") as? String else { return false }
+        return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group) != nil
+    }
+
+    private static func makeLocalStore(schema: Schema, reason: String) -> PersistenceController {
+        let localConfiguration = ModelConfiguration("RecipesLocal", schema: schema, cloudKitDatabase: .none)
+        do {
+            return .init(
+                container: try ModelContainer(for: schema, configurations: [localConfiguration]),
+                mode: .localFallback,
+                setupError: reason
+            )
+        } catch {
+            fatalError("Unable to initialize recipe storage: \(error)")
         }
     }
 

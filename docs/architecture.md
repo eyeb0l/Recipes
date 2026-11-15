@@ -19,3 +19,7 @@ A stage is ready when it is incomplete and all dependency IDs are complete. Mult
 ## Import trust boundary
 
 The app never contains provider secrets. It authenticates to the Worker with Sign in with Apple, then submits one normalized source. URL fetching and provider invocation occur only in the Worker. The model returns canonical data; the backend and app independently validate graph references and cycles before deterministic rendering.
+
+## Data boundaries
+
+Canonical recipes and cleaned source text are stored by the app. Cookbook images are normalized on device, uploaded only for the extraction request, and never inserted into SwiftData. Active cooking state is stored separately in the App Group so Live Activity intents do not write cook progress into CloudKit. The Worker stores only opaque session material, token hashes, and quota counters; request bodies and canonical results are not logged or retained.
