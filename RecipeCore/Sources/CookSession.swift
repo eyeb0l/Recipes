@@ -150,6 +150,11 @@ public struct CookSession: Codable, Hashable, Identifiable, Sendable {
         }
     }
 
+    /// Ended by the cook before every stage was done. Unlike a finished session, it accepts no changes.
+    public var isAbandoned: Bool {
+        endedAt != nil && !isComplete
+    }
+
     /// The share of stages finished, from 0 to 1.
     public var progress: Double {
         stages.isEmpty ? 0 : Double(completedStageIDs.count) / Double(stages.count)
@@ -358,8 +363,10 @@ public actor CookSessionStore {
         }
     }
 
+    /// Rejects changes to a session the cook abandoned. A finished session still lets the cook
+    /// manage timers that are running when the last stage is marked done.
     private static func requireActive(_ session: CookSession) throws {
-        guard session.endedAt == nil else { throw CookSessionError.sessionEnded }
+        guard !session.isAbandoned else { throw CookSessionError.sessionEnded }
     }
 
     private func update(sessionID: String, mutation: (inout CookSession) throws -> Void) throws -> CookSession {

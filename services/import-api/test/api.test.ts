@@ -278,6 +278,33 @@ describe("import API", () => {
     }
   });
 
+  it("charges the fetch allowance for a retry that joins in-flight URL work", async () => {
+    const env = testEnv();
+    const kv = env.SESSIONS as unknown as MemoryKV;
+    let release: () => void = () => undefined;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    const extract = vi.fn(async () => {
+      await pending;
+      return { recipe: validRecipe(), provider: "openai" as const, model: "gpt-6.1-terra" };
+    });
+    const fetcher = vi.fn(async () => new Response(`<script type="application/ld+json">${JSON.stringify({
+      "@type": "Recipe", name: "Pancakes", recipeYield: "2", recipeIngredient: ["100 g flour"], recipeInstructions: ["Mix and cook."]
+    })}</script>`, { headers: { "Content-Type": "text/html" } }));
+    const app = createApp({ verifyApple: async () => "opaque-apple-subject", fetcher, resolver: publicResolver, extractorFactory: () => ({ provider: "openai", model: "gpt-6.1-terra", extract }) });
+    const token = await accessToken(app, env);
+
+    const first = app.request("/v1/recipe-imports", urlImportRequest(token, "shared-key"), env);
+    await vi.waitFor(() => expect(extract).toHaveBeenCalledTimes(1));
+    const fetchKey = [...kv.values.keys()].find((key) => key.startsWith("fetch-quota:"))!;
+    kv.values.set(fetchKey, "40");
+    const reused = await app.request("/v1/recipe-imports", urlImportRequest(token, "shared-key"), env);
+    expect(reused.status).toBe(429);
+    expect((await reused.json() as any).error.code).toBe("fetch_quota_exceeded");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    release();
+    expect((await first).status).toBe(200);
+  });
+
   it("rejects work once the daily allowance is used without fetching the source or calling the provider", async () => {
     const env = testEnv();
     const extract = vi.fn();

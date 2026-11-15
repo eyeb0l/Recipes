@@ -66,8 +66,10 @@ export function createApp(dependencies: AppDependencies = {}) {
       dependencies.fetcher,
       dependencies.resolver,
       async (metadata) => {
-        if (inFlightImports.has(`${quotaKey}:${metadata.idempotencyKey}`)) return;
-        await assertDailyQuotaAvailable(context.env, quotaKey);
+        // A retry joining in-flight work was already admitted, but every outbound fetch still counts.
+        if (!inFlightImports.has(`${quotaKey}:${metadata.idempotencyKey}`)) {
+          await assertDailyQuotaAvailable(context.env, quotaKey);
+        }
         await consumeDailyFetchAllowance(context.env, quotaKey);
       }
     );

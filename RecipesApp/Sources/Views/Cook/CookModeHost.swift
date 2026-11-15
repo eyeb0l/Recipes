@@ -65,7 +65,7 @@ struct CookModeHost: View {
         do {
             let restored = try await CookSessionStore.shared.reconcileTimers(sessionID: sessionID)
             // A cook link or Live Activity can point at a session the cook already ended.
-            guard restored.endedAt == nil || restored.isComplete else {
+            guard !restored.isAbandoned else {
                 errorMessage = "This cooking session has ended. Start cooking again from the recipe."
                 return
             }

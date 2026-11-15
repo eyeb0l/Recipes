@@ -167,6 +167,9 @@ schemes:
         RecipeTimelineUITests: [test]
     test:
       gatherCoverageData: true
+      # Unit tests run inside the app; keep its library in memory and off CloudKit.
+      environmentVariables:
+        RECIPE_TIMELINE_IN_MEMORY_STORE: "1"
       targets:
         - RecipeCoreTests
         - RecipeTimelineTests

@@ -48,7 +48,7 @@ public struct ToggleCookTimerIntent: LiveActivityIntent {
 
     public func perform() async throws -> some IntentResult {
         guard let current = try await CookSessionStore.shared.session(id: sessionID),
-              current.endedAt == nil,
+              !current.isAbandoned,
               let stage = current.stages.first(where: { $0.id == stageID }),
               let timer = stage.timers.first(where: { "\(stageID):\($0.id)" == timerID }) else {
             return .result()
@@ -69,9 +69,11 @@ public enum CookTimerNotifications {
         (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])) ?? false
     }
 
-    public static func sync(session: CookSession) async {
-        // An abandoned session must never schedule alerts, even from a stale snapshot.
-        if session.endedAt != nil, !session.isComplete {
+    public static func sync(session snapshot: CookSession, store: CookSessionStore = .shared) async {
+        // Callers can hold a snapshot taken before the cook ended the session, so act on the stored one.
+        let session = (try? await store.session(id: snapshot.id)) ?? snapshot
+        // An abandoned session must never schedule alerts.
+        if session.isAbandoned {
             await cancelAll(session: session)
             return
         }
@@ -93,6 +95,10 @@ public enum CookTimerNotifications {
                 trigger: UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(max(remaining, 1)), repeats: false)
             )
             try? await center.add(request)
+        }
+        // If End cooking ran while alerts were being added, withdraw them again.
+        if let latest = try? await store.session(id: session.id), latest.isAbandoned {
+            await cancelAll(session: latest)
         }
     }
 

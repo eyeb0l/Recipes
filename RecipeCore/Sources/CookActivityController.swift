@@ -6,7 +6,7 @@ public enum CookActivityController {
         // Callers can hold a snapshot taken before the cook ended the session, so act on the stored one.
         let session = (try? await store.session(id: snapshot.id)) ?? snapshot
         // An abandoned session must never revive its activity.
-        if session.endedAt != nil, !session.isComplete {
+        if session.isAbandoned {
             await end(session: session)
             return
         }
@@ -27,7 +27,7 @@ public enum CookActivityController {
             )
             // If End persisted after the read above, it may have looked for activities before this one
             // existed. Re-check: an End that persists later still finds this activity and ends it.
-            if let latest = try? await store.session(id: session.id), latest.endedAt != nil, !latest.isComplete {
+            if let latest = try? await store.session(id: session.id), latest.isAbandoned {
                 await activity.end(nil, dismissalPolicy: .immediate)
             }
         } catch {

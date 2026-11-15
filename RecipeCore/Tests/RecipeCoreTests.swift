@@ -397,6 +397,24 @@ final class RecipeCoreTests: XCTestCase {
         XCTAssertEqual(afterIntent?.runningTimerCount, 0)
     }
 
+    func testFinishingTheLastStageStillLetsTheCookCancelARunningTimer() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("CookSession-\(UUID().uuidString).json")
+        let store = CookSessionStore(fileURL: url)
+        let recipe = SampleRecipe.espressoBrownies
+        let bakeTimer = try XCTUnwrap(recipe.stages.first { $0.id == "bake" }?.timers.first)
+        let session = try await store.createSession(for: recipe)
+        for stageID in ["preheat", "melt", "mix-wet", "add-eggs", "fold"] {
+            _ = try await store.complete(stageID: stageID, sessionID: session.id)
+        }
+        _ = try await store.toggleTimer(sessionID: session.id, stageID: "bake", timer: bakeTimer)
+        let finished = try await store.complete(stageID: "bake", sessionID: session.id)
+        XCTAssertTrue(finished.isComplete)
+        XCTAssertFalse(finished.isAbandoned)
+
+        let cancelled = try await store.cancelTimer(timerID: "bake:\(bakeTimer.id)", sessionID: session.id)
+        XCTAssertEqual(cancelled.runningTimerCount, 0)
+    }
+
     func testCookSessionsSavedBeforeScalingWasStoredStillDecode() throws {
         let session = CookSession(recipe: SampleRecipe.espressoBrownies, servings: 4, unitSystem: .metric)
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(session)) as? [String: Any])

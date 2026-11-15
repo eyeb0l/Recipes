@@ -394,7 +394,7 @@ struct CookModeView: View {
             if let updated = try? await CookSessionStore.shared.reconcileTimers(sessionID: session.id),
                !Task.isCancelled,
                updated != session,
-               updated.endedAt == nil || updated.isComplete {
+               !updated.isAbandoned {
                 onSessionChanged(updated)
                 await CookActivityController.startOrUpdate(session: updated)
             }
