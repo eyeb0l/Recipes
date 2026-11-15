@@ -9,20 +9,19 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:live:sites": "node --import tsx scripts/recipe-site-compat.ts",
-    "test:live:grok": "env -u XAI_API_KEY node --env-file=.dev.vars --import tsx scripts/live-contract.ts grok",
-    "test:live:openai": "env -u OPENAI_API_KEY node --env-file=.dev.vars --import tsx scripts/live-contract.ts openai"
+    "test:live:openai": "env -u OPENAI_API_KEY node --env-file=.dev.vars --import tsx scripts/live-contract.ts"
   },
   "dependencies": {
-    "hono": "^4.9.0",
-    "jose": "^6.1.0"
+    "hono": "^4.13.18",
+    "jose": "^6.2.17"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260818.1",
+    "@cloudflare/workers-types": "^5.20261115.1",
     "ajv": "^8.17.1",
-    "tsx": "^4.20.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0",
-    "wrangler": "^4.28.0"
+    "wrangler": "^4.162.0"
   },
   "engines": {
     "node": ">=22"

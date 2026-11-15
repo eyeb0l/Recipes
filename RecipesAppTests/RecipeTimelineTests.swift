@@ -191,4 +191,119 @@ final class RecipeTimelineTests: XCTestCase {
             "57½ g"
         )
     }
+
+    @MainActor
+    func testRecipeURLNormalisationAcceptsPastedLinksAndRejectsNonLinks() {
+        XCTAssertEqual(
+            ImportRecipeView.normalizedRecipeURL(from: "  https://example.com/recipes/stew \n")?.absoluteString,
+            "https://example.com/recipes/stew"
+        )
+        XCTAssertEqual(
+            ImportRecipeView.normalizedRecipeURL(from: "example.com/recipes/stew")?.absoluteString,
+            "https://example.com/recipes/stew"
+        )
+        XCTAssertEqual(ImportRecipeView.normalizedRecipeURL(from: "http://example.org/a")?.scheme, "http")
+        XCTAssertNil(ImportRecipeView.normalizedRecipeURL(from: ""))
+        XCTAssertNil(ImportRecipeView.normalizedRecipeURL(from: "ftp://example.com/recipe"))
+        XCTAssertNil(ImportRecipeView.normalizedRecipeURL(from: "chocolate cake"))
+        XCTAssertNil(ImportRecipeView.normalizedRecipeURL(from: "localhost"))
+    }
+
+    @MainActor
+    func testPastedTextThresholdMatchesTheImportService() {
+        // services/import-api rejects trimmed text shorter than 40 characters.
+        XCTAssertEqual(ImportRecipeView.minimumPastedTextLength, 40)
+    }
+
+    @MainActor
+    func testConcurrentTokenRefreshesShareOneRotatingRequest() async throws {
+        StubSessionProtocol.reset(status: 200, body: try Self.tokenBody(access: "fresh-access", refresh: "fresh-refresh"), delay: 0.2)
+        URLProtocol.registerClass(StubSessionProtocol.self)
+        defer { URLProtocol.unregisterClass(StubSessionProtocol.self) }
+
+        let auth = AuthSession(restoring: Self.expiredAccessTokens(), storage: .init(save: { _ in }, delete: {}))
+        defer { auth.signOut() }
+        async let first = auth.validAccessToken()
+        async let second = auth.validAccessToken()
+        let tokens = try await [first, second]
+
+        XCTAssertEqual(tokens, ["fresh-access", "fresh-access"])
+        XCTAssertEqual(StubSessionProtocol.refreshRequestCount, 1)
+        XCTAssertEqual(auth.state, .signedIn)
+    }
+
+    @MainActor
+    func testRejectedRefreshSignsOutWithAnExpiredSessionError() async throws {
+        StubSessionProtocol.reset(status: 401, body: Data(#"{"error":{"code":"invalid_refresh","message":"no"}}"#.utf8))
+        URLProtocol.registerClass(StubSessionProtocol.self)
+        defer { URLProtocol.unregisterClass(StubSessionProtocol.self) }
+
+        let auth = AuthSession(restoring: Self.expiredAccessTokens(), storage: .init(save: { _ in }, delete: {}))
+        do {
+            _ = try await auth.validAccessToken()
+            XCTFail("A rejected refresh must not return a token")
+        } catch APIClientError.sessionExpired {
+            // Expected.
+        }
+        XCTAssertFalse(auth.isAuthenticated)
+        XCTAssertEqual(auth.state, .signedOut)
+    }
+
+    private static func expiredAccessTokens() -> SessionTokens {
+        SessionTokens(
+            accessToken: "stale-access",
+            refreshToken: "stale-refresh",
+            accessExpiresAt: Date().addingTimeInterval(-60),
+            refreshExpiresAt: Date().addingTimeInterval(86_400)
+        )
+    }
+
+    private static func tokenBody(access: String, refresh: String) throws -> Data {
+        let formatter = ISO8601DateFormatter()
+        return try JSONSerialization.data(withJSONObject: [
+            "accessToken": access,
+            "refreshToken": refresh,
+            "accessExpiresAt": formatter.string(from: Date().addingTimeInterval(900)),
+            "refreshExpiresAt": formatter.string(from: Date().addingTimeInterval(86_400))
+        ])
+    }
+}
+
+/// Answers the import service's session refresh endpoint without touching the network.
+private final class StubSessionProtocol: URLProtocol {
+    nonisolated(unsafe) private static var status = 200
+    nonisolated(unsafe) private static var body = Data()
+    nonisolated(unsafe) private static var delay: TimeInterval = 0
+    nonisolated(unsafe) private(set) static var refreshRequestCount = 0
+    private static let lock = NSLock()
+
+    static func reset(status: Int, body: Data, delay: TimeInterval = 0) {
+        lock.withLock {
+            self.status = status
+            self.body = body
+            self.delay = delay
+            refreshRequestCount = 0
+        }
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        request.url?.path().hasSuffix("/v1/session/refresh") == true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let (status, body, delay) = Self.lock.withLock {
+            Self.refreshRequestCount += 1
+            return (Self.status, Self.body, Self.delay)
+        }
+        let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!
+        // Loading runs on URLSession's own thread, so a short sleep keeps a second caller waiting.
+        if delay > 0 { Thread.sleep(forTimeInterval: delay) }
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: body)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
 }

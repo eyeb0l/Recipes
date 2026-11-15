@@ -2,7 +2,14 @@ import ActivityKit
 import Foundation
 
 public enum CookActivityController {
-    public static func startOrUpdate(session: CookSession) async {
+    public static func startOrUpdate(session snapshot: CookSession, store: CookSessionStore = .shared) async {
+        // Callers can hold a snapshot taken before the cook ended the session, so act on the stored one.
+        let session = (try? await store.session(id: snapshot.id)) ?? snapshot
+        // An abandoned session must never revive its activity.
+        if session.isAbandoned {
+            await end(session: session)
+            return
+        }
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         if let activity = activity(for: session.id) {
             await activity.update(content(for: session))
@@ -13,11 +20,16 @@ public enum CookActivityController {
         }
         guard !session.isComplete else { return }
         do {
-            _ = try Activity.request(
+            let activity = try Activity.request(
                 attributes: CookActivityAttributes(session: session),
                 content: content(for: session),
                 pushType: nil
             )
+            // If End persisted after the read above, it may have looked for activities before this one
+            // existed. Re-check: an End that persists later still finds this activity and ends it.
+            if let latest = try? await store.session(id: session.id), latest.isAbandoned {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
         } catch {
             // Cook mode remains fully functional when the system declines a Live Activity.
         }

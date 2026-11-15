@@ -53,29 +53,49 @@ struct CookModeView: View {
     }
 
     private func cookHeader(at date: Date) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 16) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Cook mode")
-                    .font(.caption.weight(.bold))
-                    .textCase(.uppercase)
-                    .accessibilityIdentifier("cook-mode-title")
-                    .tracking(1.3)
-                    .foregroundStyle(RecipeTheme.secondaryInk)
-                Text("\(session.completedStageIDs.count) of \(session.stages.count) done")
-                    .font(.title3.weight(.semibold))
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Cook mode")
+                        .font(.caption.weight(.bold))
+                        .textCase(.uppercase)
+                        .accessibilityIdentifier("cook-mode-title")
+                        .tracking(1.3)
+                        .foregroundStyle(RecipeTheme.focusText)
+                    Text("\(session.completedStageIDs.count) of \(session.stages.count) done")
+                        .font(RecipeTheme.display(.title2))
+                        .contentTransition(.numericText(value: Double(session.completedStageIDs.count)))
+                }
+                Spacer()
+                if session.runningTimerCount > 0 {
+                    Label("\(session.runningTimerCount) running", systemImage: "timer")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(RecipeTheme.focusText)
+                }
             }
-            Spacer()
-            if session.runningTimerCount > 0 {
-                Label("\(session.runningTimerCount) running", systemImage: "timer")
-                    .foregroundStyle(RecipeTheme.focusText)
+            ProgressView(value: session.progress)
+                .tint(RecipeTheme.focus)
+                .animation(reduceMotion ? nil : .snappy, value: session.progress)
+            if let scaleDescription {
+                Text(scaleDescription)
+                    .font(.footnote)
+                    .foregroundStyle(RecipeTheme.secondaryInk)
             }
             if let mutationError {
-                Text(mutationError)
+                Label(mutationError, systemImage: "exclamationmark.triangle.fill")
                     .font(.footnote)
                     .foregroundStyle(RecipeTheme.warning)
             }
         }
         .accessibilityElement(children: .combine)
+    }
+
+    private var scaleDescription: String? {
+        guard let servings = session.servings else { return nil }
+        let count = NSDecimalNumber(decimal: servings).doubleValue.formatted(.number.precision(.fractionLength(0...1)))
+        let units = session.unitSystem.map { " · \($0.displayName)" } ?? ""
+        let scaled = session.baseServings.map { $0 == servings } ?? true ? "" : " (scaled)"
+        return "\(count) serving\(servings == 1 ? "" : "s")\(scaled)\(units)"
     }
 
     private func prepChecklist(_ recipe: RecipeV1) -> some View {
@@ -100,7 +120,7 @@ struct CookModeView: View {
                 .font(.headline)
         }
         .padding(18)
-        .background(RecipeTheme.surface, in: RoundedRectangle(cornerRadius: 14))
+        .paperCard(cornerRadius: 20)
     }
 
     private func focusedStage(_ stage: CookStageSnapshot, at date: Date) -> some View {
@@ -108,13 +128,16 @@ struct CookModeView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 7) {
                     Text(stage.action)
-                        .font(.system(horizontalSizeClass == .compact ? .largeTitle : .largeTitle, design: .serif, weight: .bold))
+                        .font(RecipeTheme.display(.largeTitle, weight: .bold))
                         .accessibilityAddTraits(.isHeader)
                     if let temperature = stage.temperature {
-                        Label(temperature.displayString, systemImage: "thermometer.medium")
+                        Label(
+                            temperature.converted(for: session.unitSystem ?? .source).displayString(),
+                            systemImage: "thermometer.medium"
+                        )
                     }
                     if let heat = stage.heat {
-                        Label(heat, systemImage: "flame")
+                        Label(heat.capitalized, systemImage: "flame")
                     }
                 }
                 Spacer()
@@ -131,15 +154,19 @@ struct CookModeView: View {
                 .lineSpacing(7)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if !stage.ingredientNames.isEmpty {
-                VStack(alignment: .leading, spacing: 7) {
-                    Text("Add now")
-                        .font(.caption.weight(.bold))
-                        .textCase(.uppercase)
-                        .foregroundStyle(RecipeTheme.secondaryInk)
-                    Text(stage.ingredientNames.joined(separator: " · "))
-                        .font(.title3.weight(.semibold))
+            let lines = session.ingredientLines(for: stage)
+            if !lines.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    EyebrowLabel("Add now", color: RecipeTheme.focusText)
+                    ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                        Label(line, systemImage: "arrow.right.circle.fill")
+                            .font(.title3.weight(.semibold))
+                            .labelStyle(AddNowLabelStyle())
+                    }
                 }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RecipeTheme.focus.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
 
             if let cue = stage.completionCue {
@@ -164,16 +191,12 @@ struct CookModeView: View {
                     .font(.title3.weight(.bold))
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
+            .primaryGlassButton()
+            .controlSize(.extraLarge)
             .accessibilityIdentifier("complete-stage")
         }
         .padding(horizontalSizeClass == .compact ? 22 : 32)
-        .background(RecipeTheme.surface, in: RoundedRectangle(cornerRadius: 20))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(RecipeTheme.focus, lineWidth: 2)
-        }
+        .paperCard(cornerRadius: 26, isHighlighted: true)
         .shadow(color: RecipeTheme.ink.opacity(0.07), radius: 18, y: 8)
     }
 
@@ -189,7 +212,7 @@ struct CookModeView: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.large)
-            .tint(state?.status == .finished ? RecipeTheme.warning : RecipeTheme.focus)
+            .tint(state.map { displayStatus($0, at: date) } == .finished ? RecipeTheme.warning : RecipeTheme.focus)
         }
     }
 
@@ -201,20 +224,23 @@ struct CookModeView: View {
                 Text("Timers")
                     .font(.title2.weight(.semibold))
                 ForEach(timers) { timer in
+                    let status = displayStatus(timer, at: date)
                     HStack(spacing: 14) {
-                        Image(systemName: timerIcon(timer.status))
-                            .foregroundStyle(timer.status == .finished ? RecipeTheme.warning : RecipeTheme.focus)
+                        Image(systemName: timerIcon(status))
+                            .foregroundStyle(status == .finished ? RecipeTheme.warning : RecipeTheme.focus)
+                            .symbolEffect(.pulse, isActive: status == .finished && !reduceMotion)
                         VStack(alignment: .leading) {
                             Text(timer.label).font(.headline)
-                            Text(timer.status == .finished ? "Finished" : duration(timer.secondsRemaining(at: date)))
+                            Text(status == .finished ? "Done" : duration(timer.secondsRemaining(at: date)))
+                                .font(.title3.weight(.semibold))
                                 .monospacedDigit()
-                                .foregroundStyle(RecipeTheme.secondaryInk)
+                                .foregroundStyle(status == .finished ? RecipeTheme.warning : RecipeTheme.ink)
                         }
                         Spacer()
                         if let stage = session.stages.first(where: { $0.id == timer.stageID }) {
                             Text(stage.action).font(.subheadline).foregroundStyle(RecipeTheme.secondaryInk)
                         }
-                        if timer.status == .running || timer.status == .paused {
+                        if status == .running || status == .paused {
                             Button("Cancel timer", systemImage: "xmark") {
                                 Task { await cancel(timer.id) }
                             }
@@ -224,7 +250,10 @@ struct CookModeView: View {
                         }
                     }
                     .padding(14)
-                    .background(RecipeTheme.stage, in: RoundedRectangle(cornerRadius: 11))
+                    .background(
+                        status == .finished ? RecipeTheme.warning.opacity(0.14) : RecipeTheme.stage,
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    )
                 }
             }
         }
@@ -251,7 +280,8 @@ struct CookModeView: View {
                             Image(systemName: "arrow.right")
                         }
                         .padding(16)
-                        .background(RecipeTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                        .paperCard(cornerRadius: 18)
+                        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                     }
                     .buttonStyle(.plain)
                 }
@@ -283,19 +313,28 @@ struct CookModeView: View {
                 .font(.system(size: 58))
                 .foregroundStyle(RecipeTheme.focus)
             Text("All done")
-                .font(.system(.largeTitle, design: .serif, weight: .bold))
+                .font(RecipeTheme.display(.largeTitle, weight: .bold))
+            Text("Enjoy your \(session.recipeTitle.lowercased()).")
+                .font(.title3)
+                .foregroundStyle(RecipeTheme.secondaryInk)
+                .multilineTextAlignment(.center)
             Button("Back to recipe", action: onExit)
-                .buttonStyle(.borderedProminent)
+                .primaryGlassButton()
                 .controlSize(.large)
         }
         .frame(maxWidth: .infinity)
         .padding(40)
-        .background(RecipeTheme.surface, in: RoundedRectangle(cornerRadius: 20))
+        .paperCard(cornerRadius: 26)
+    }
+
+    /// A running timer that has reached zero reads as done at once, before the store reconciles it.
+    private func displayStatus(_ timer: CookTimerState, at date: Date) -> CookTimerStatus {
+        timer.status == .running && timer.secondsRemaining(at: date) == 0 ? .finished : timer.status
     }
 
     private func timerLabel(_ timer: StageTimer, state: CookTimerState?, at date: Date) -> String {
         guard let state else { return "\(timer.label) · \(duration(timer.durationSeconds))" }
-        switch state.status {
+        switch displayStatus(state, at: date) {
         case .running: return "Pause · \(duration(state.secondsRemaining(at: date)))"
         case .paused: return "Resume · \(duration(state.secondsRemaining(at: date)))"
         case .finished: return "Restart timer"
@@ -352,7 +391,10 @@ struct CookModeView: View {
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(15))
             guard !Task.isCancelled else { return }
-            if let updated = try? await CookSessionStore.shared.reconcileTimers(sessionID: session.id), updated != session {
+            if let updated = try? await CookSessionStore.shared.reconcileTimers(sessionID: session.id),
+               !Task.isCancelled,
+               updated != session,
+               !updated.isAbandoned {
                 onSessionChanged(updated)
                 await CookActivityController.startOrUpdate(session: updated)
             }
@@ -365,8 +407,15 @@ struct CookModeView: View {
     }
 }
 
-private extension CookingTemperature {
-    var displayString: String {
-        "\(NSDecimalNumber(decimal: value))°\(unit == .celsius ? "C" : "F")"
+private struct AddNowLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            configuration.icon
+                .font(.body)
+                .foregroundStyle(RecipeTheme.focus)
+                .accessibilityHidden(true)
+            configuration.title
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }

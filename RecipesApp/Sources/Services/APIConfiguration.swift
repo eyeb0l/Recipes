@@ -29,6 +29,7 @@ enum APIClientError: LocalizedError {
     case rejected(status: Int, message: String)
     case missingIdentityToken
     case missingSession
+    case sessionExpired
     case invalidSource
 
     var errorDescription: String? {
@@ -37,6 +38,7 @@ enum APIClientError: LocalizedError {
         case let .rejected(_, message): message
         case .missingIdentityToken: "Sign in with Apple didn't return a valid sign-in token. Try again."
         case .missingSession: "Sign in with Apple before importing a recipe."
+        case .sessionExpired: "Your sign-in has expired. Sign in with Apple again to keep importing."
         case .invalidSource: "Add a recipe URL, text, or at least one cookbook image."
         }
     }

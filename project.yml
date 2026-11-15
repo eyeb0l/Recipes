@@ -2,7 +2,7 @@ name: RecipeTimeline
 options:
   minimumXcodeGenVersion: 2.44.1
   deploymentTarget:
-    iOS: "26.0"
+    iOS: "27.0"
   createIntermediateGroups: true
   generateEmptyDirectories: true
 
@@ -10,8 +10,8 @@ settings:
   base:
     SWIFT_VERSION: 6.0
     SWIFT_STRICT_CONCURRENCY: complete
-    MARKETING_VERSION: 1.0
-    CURRENT_PROJECT_VERSION: 10
+    MARKETING_VERSION: 1.1
+    CURRENT_PROJECT_VERSION: 11
     ENABLE_USER_SCRIPT_SANDBOXING: true
     ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: true
     CODE_SIGN_STYLE: Automatic
@@ -167,6 +167,9 @@ schemes:
         RecipeTimelineUITests: [test]
     test:
       gatherCoverageData: true
+      # Unit tests run inside the app; keep its library in memory and off CloudKit.
+      environmentVariables:
+        RECIPE_TIMELINE_IN_MEMORY_STORE: "1"
       targets:
         - RecipeCoreTests
         - RecipeTimelineTests

@@ -57,13 +57,29 @@ export function createApp(dependencies: AppDependencies = {}) {
     const quotaKey = await subjectDigest(claims.sub);
     const quota = await context.env.IMPORT_RATE_LIMITER.limit({ key: quotaKey });
     if (!quota.success) throw new APIError(429, "rate_limited", "Too many imports were started at once. Try again shortly.");
-    await consumeDailyQuota(context.env, quotaKey);
 
-    const prepared = await prepareImportRequest(context.req.raw, dependencies.fetcher, dependencies.resolver);
+    // Invalid sources and retries that join in-flight work never reach the provider, so they don't use the daily allowance.
+    // New URL imports are checked against the allowance before fetching, and outbound page fetches have
+    // their own daily cap, so failed links can't fetch without limit.
+    const prepared = await prepareImportRequest(
+      context.req.raw,
+      dependencies.fetcher,
+      dependencies.resolver,
+      async (metadata) => {
+        // A retry joining in-flight work was already admitted, but every outbound fetch still counts.
+        if (!inFlightImports.has(`${quotaKey}:${metadata.idempotencyKey}`)) {
+          await assertDailyQuotaAvailable(context.env, quotaKey);
+        }
+        await consumeDailyFetchAllowance(context.env, quotaKey);
+      }
+    );
     const dedupeKey = `${quotaKey}:${prepared.metadata.idempotencyKey}`;
     let work = inFlightImports.get(dedupeKey);
     if (!work) {
-      work = performImport(context.env, prepared, context.get("requestID"), dependencies.extractorFactory);
+      const env = context.env;
+      const requestID = context.get("requestID");
+      work = consumeDailyQuota(env, quotaKey)
+        .then(() => performImport(env, prepared, requestID, dependencies.extractorFactory));
       inFlightImports.set(dedupeKey, work);
       void work.finally(() => inFlightImports.delete(dedupeKey)).catch(() => undefined);
     }
@@ -110,13 +126,43 @@ async function subjectDigest(subject: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function consumeDailyQuota(env: Env, subjectHash: string): Promise<void> {
+const dailyImportLimit = 20;
+/** Public page fetches allowed per user per day, including fetches whose page turns out unusable. */
+const dailyFetchLimit = 40;
+
+function dailyQuotaKey(subjectHash: string): { day: string; key: string } {
   const day = new Date().toISOString().slice(0, 10);
-  const key = `quota:${day}:${subjectHash}`;
+  return { day, key: `quota:${day}:${subjectHash}` };
+}
+
+function quotaExceeded(): APIError {
+  return new APIError(429, "quota_exceeded", "The daily private import allowance has been reached.");
+}
+
+async function assertDailyQuotaAvailable(env: Env, subjectHash: string): Promise<void> {
+  const { key } = dailyQuotaKey(subjectHash);
+  if (Number(await env.SESSIONS.get(key) ?? 0) >= dailyImportLimit) throw quotaExceeded();
+}
+
+async function consumeDailyFetchAllowance(env: Env, subjectHash: string): Promise<void> {
+  const { day } = dailyQuotaKey(subjectHash);
+  const key = `fetch-quota:${day}:${subjectHash}`;
   const current = Number(await env.SESSIONS.get(key) ?? 0);
-  if (current >= 20) throw new APIError(429, "quota_exceeded", "The daily private import allowance has been reached.");
-  const secondsUntilExpiry = Math.max(60, Math.floor((Date.parse(`${day}T00:00:00.000Z`) + 2 * 86_400_000 - Date.now()) / 1_000));
-  await env.SESSIONS.put(key, String(current + 1), { expirationTtl: secondsUntilExpiry });
+  if (current >= dailyFetchLimit) {
+    throw new APIError(429, "fetch_quota_exceeded", "Too many recipe links were tried today. Paste the recipe text or scan the page instead.");
+  }
+  await env.SESSIONS.put(key, String(current + 1), { expirationTtl: quotaTTLSeconds(day) });
+}
+
+function quotaTTLSeconds(day: string): number {
+  return Math.max(60, Math.floor((Date.parse(`${day}T00:00:00.000Z`) + 2 * 86_400_000 - Date.now()) / 1_000));
+}
+
+async function consumeDailyQuota(env: Env, subjectHash: string): Promise<void> {
+  const { day, key } = dailyQuotaKey(subjectHash);
+  const current = Number(await env.SESSIONS.get(key) ?? 0);
+  if (current >= dailyImportLimit) throw quotaExceeded();
+  await env.SESSIONS.put(key, String(current + 1), { expirationTtl: quotaTTLSeconds(day) });
 }
 
 export default createApp();

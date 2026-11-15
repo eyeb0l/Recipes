@@ -45,6 +45,19 @@ public struct CookTimerState: Codable, Hashable, Identifiable, Sendable {
     }
 }
 
+/// An ingredient as it was when cooking started, so later recipe edits can't change a cook in progress.
+public struct CookIngredientSnapshot: Codable, Hashable, Sendable {
+    public var name: String
+    public var quantity: CulinaryQuantity?
+    public var scalable: Bool
+
+    public init(name: String, quantity: CulinaryQuantity?, scalable: Bool) {
+        self.name = name
+        self.quantity = quantity
+        self.scalable = scalable
+    }
+}
+
 public struct CookStageSnapshot: Codable, Hashable, Identifiable, Sendable {
     public var id: String
     public var action: String
@@ -52,6 +65,8 @@ public struct CookStageSnapshot: Codable, Hashable, Identifiable, Sendable {
     public var completionCue: String?
     public var dependencies: [String]
     public var ingredientNames: [String]
+    /// Amounts added at this stage. `nil` for sessions saved by earlier builds, which kept names only.
+    public var ingredients: [CookIngredientSnapshot]?
     public var timers: [StageTimer]
     public var heat: String?
     public var temperature: CookingTemperature?
@@ -64,6 +79,10 @@ public struct CookStageSnapshot: Codable, Hashable, Identifiable, Sendable {
         completionCue = stage.completionCue
         dependencies = stage.dependencies
         ingredientNames = stage.ingredientUses.compactMap { ingredients[$0.ingredientID]?.name }
+        self.ingredients = stage.ingredientUses.compactMap { use in
+            guard let ingredient = ingredients[use.ingredientID] else { return nil }
+            return .init(name: ingredient.name, quantity: use.quantity ?? ingredient.quantity, scalable: ingredient.scalable)
+        }
         timers = stage.timers
         heat = stage.heat
         temperature = stage.temperature
@@ -84,8 +103,19 @@ public struct CookSession: Codable, Hashable, Identifiable, Sendable {
     public var startedAt: Date
     public var updatedAt: Date
     public var endedAt: Date?
+    /// The serving count chosen when cooking started. `nil` for sessions saved by earlier builds.
+    public var servings: Decimal?
+    /// The display units chosen when cooking started. `nil` for sessions saved by earlier builds.
+    public var unitSystem: UnitSystemPreference?
+    /// The recipe's own serving count when cooking started; the base for scaling snapshot amounts.
+    public var baseServings: Decimal?
 
-    public init(recipe: RecipeV1, date: Date = Date()) {
+    public init(
+        recipe: RecipeV1,
+        servings: Decimal? = nil,
+        unitSystem: UnitSystemPreference? = nil,
+        date: Date = Date()
+    ) {
         let ingredientMap = Dictionary(uniqueKeysWithValues: recipe.ingredients.map { ($0.id, $0) })
         id = UUID().uuidString
         recipeID = recipe.id
@@ -99,6 +129,35 @@ public struct CookSession: Codable, Hashable, Identifiable, Sendable {
         startedAt = date
         updatedAt = date
         endedAt = nil
+        self.servings = servings
+        self.unitSystem = unitSystem
+        baseServings = recipe.recipeYield.servings
+    }
+
+    /// What to add at a stage, scaled to the session's servings and units, from the snapshot taken
+    /// when cooking started. Sessions from earlier builds fall back to ingredient names.
+    public func ingredientLines(for stage: CookStageSnapshot) -> [String] {
+        guard let ingredients = stage.ingredients else { return stage.ingredientNames }
+        let base = baseServings ?? 0
+        let factor = base > 0 ? (servings ?? base) / base : 1
+        let units = unitSystem ?? .source
+        return ingredients.map { ingredient in
+            let amount = ingredient.quantity?
+                .scaled(by: factor, enabled: ingredient.scalable)
+                .converted(for: units)
+                .displayString()
+            return [amount, ingredient.name].compactMap { $0 }.joined(separator: " ")
+        }
+    }
+
+    /// Ended by the cook before every stage was done. Unlike a finished session, it accepts no changes.
+    public var isAbandoned: Bool {
+        endedAt != nil && !isComplete
+    }
+
+    /// The share of stages finished, from 0 to 1.
+    public var progress: Double {
+        stages.isEmpty ? 0 : Double(completedStageIDs.count) / Double(stages.count)
     }
 
     public var isComplete: Bool {
@@ -136,12 +195,24 @@ public actor CookSessionStore {
         self.fileURL = fileURL ?? Self.defaultFileURL()
     }
 
-    public func createSession(for recipe: RecipeV1, date: Date = Date()) throws -> CookSession {
+    public func createSession(
+        for recipe: RecipeV1,
+        servings: Decimal? = nil,
+        unitSystem: UnitSystemPreference? = nil,
+        date: Date = Date()
+    ) throws -> CookSession {
         var all = try loadIfNeeded()
-        if let existing = all.values.first(where: { $0.recipeID == recipe.id && $0.endedAt == nil }) {
+        if var existing = all.values.first(where: { $0.recipeID == recipe.id && $0.endedAt == nil }) {
+            // Resuming keeps progress, but follows the servings and units the cook chose this time.
+            guard existing.servings != servings || existing.unitSystem != unitSystem else { return existing }
+            existing.servings = servings
+            existing.unitSystem = unitSystem
+            existing.updatedAt = date
+            all[existing.id] = existing
+            try persist(all)
             return existing
         }
-        let session = CookSession(recipe: recipe, date: date)
+        let session = CookSession(recipe: recipe, servings: servings, unitSystem: unitSystem, date: date)
         all[session.id] = session
         try persist(all)
         return session
@@ -162,6 +233,7 @@ public actor CookSessionStore {
     @discardableResult
     public func setPrepTask(_ taskID: String, completed: Bool, sessionID: String, date: Date = Date()) throws -> CookSession {
         try update(sessionID: sessionID) { session in
+            try Self.requireActive(session)
             if completed { session.completedPrepTaskIDs.insert(taskID) } else { session.completedPrepTaskIDs.remove(taskID) }
             session.updatedAt = date
         }
@@ -170,6 +242,7 @@ public actor CookSessionStore {
     @discardableResult
     public func focus(stageID: String, sessionID: String, date: Date = Date()) throws -> CookSession {
         try update(sessionID: sessionID) { session in
+            try Self.requireActive(session)
             guard session.readyStageIDs.contains(stageID) else { return }
             session.focusedStageID = stageID
             session.updatedAt = date
@@ -183,6 +256,7 @@ public actor CookSessionStore {
                 throw CookSessionError.unknownStage
             }
             guard !session.completedStageIDs.contains(stageID) else { return }
+            try Self.requireActive(session)
             guard session.readyStageIDs.contains(stageID) else {
                 throw CookSessionError.blockedStage
             }
@@ -201,6 +275,8 @@ public actor CookSessionStore {
         date: Date = Date()
     ) throws -> CookSession {
         try update(sessionID: sessionID) { session in
+            // A Live Activity intent queued before the cook ended the session must not restart a timer.
+            try Self.requireActive(session)
             let compositeID = "\(stageID):\(timer.id)"
             guard let stage = session.stages.first(where: { $0.id == stageID }),
                   stage.timers.contains(where: { $0.id == timer.id }) else {
@@ -208,6 +284,11 @@ public actor CookSessionStore {
             }
             if let index = session.timers.firstIndex(where: { $0.id == compositeID }) {
                 var existing = session.timers[index]
+                // A running timer past its deadline is finished even before reconciliation records it,
+                // so the cook's tap restarts it rather than pausing it at zero.
+                if existing.status == .running, existing.secondsRemaining(at: date) == 0 {
+                    existing.status = .finished
+                }
                 switch existing.status {
                 case .running:
                     existing.remainingSeconds = existing.secondsRemaining(at: date)
@@ -245,6 +326,7 @@ public actor CookSessionStore {
     @discardableResult
     public func cancelTimer(timerID: String, sessionID: String, date: Date = Date()) throws -> CookSession {
         try update(sessionID: sessionID) { session in
+            try Self.requireActive(session)
             guard let index = session.timers.firstIndex(where: { $0.id == timerID }) else {
                 throw CookSessionError.unknownTimer
             }
@@ -267,11 +349,24 @@ public actor CookSessionStore {
         }
     }
 
-    public func end(sessionID: String, date: Date = Date()) throws {
-        _ = try update(sessionID: sessionID) { session in
+    /// Abandons a session: it stops being resumable and its timers stop, so nothing reschedules them.
+    /// Returns the stored session, including timers started elsewhere (for example from a Live Activity).
+    @discardableResult
+    public func end(sessionID: String, date: Date = Date()) throws -> CookSession {
+        try update(sessionID: sessionID) { session in
             session.endedAt = date
             session.updatedAt = date
+            for index in session.timers.indices where session.timers[index].status == .running || session.timers[index].status == .paused {
+                session.timers[index].status = .cancelled
+                session.timers[index].endDate = nil
+            }
         }
+    }
+
+    /// Rejects changes to a session the cook abandoned. A finished session still lets the cook
+    /// manage timers that are running when the last stage is marked done.
+    private static func requireActive(_ session: CookSession) throws {
+        guard !session.isAbandoned else { throw CookSessionError.sessionEnded }
     }
 
     private func update(sessionID: String, mutation: (inout CookSession) throws -> Void) throws -> CookSession {
@@ -317,6 +412,7 @@ public enum CookSessionError: Error, LocalizedError, Equatable {
     case unknownStage
     case blockedStage
     case unknownTimer
+    case sessionEnded
 
     public var errorDescription: String? {
         switch self {
@@ -324,6 +420,7 @@ public enum CookSessionError: Error, LocalizedError, Equatable {
         case .unknownStage: "This stage is not part of the cook session."
         case .blockedStage: "Complete the stages this step depends on first."
         case .unknownTimer: "This timer is not part of the cook session."
+        case .sessionEnded: "This cooking session has ended."
         }
     }
 }

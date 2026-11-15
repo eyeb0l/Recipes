@@ -1,18 +1,19 @@
 # Recipe Timeline
 
-Recipe Timeline is a universal SwiftUI app for iOS and iPadOS 26. It turns a canonical recipe graph into an editorial cooking timeline: ingredients stay on the left, stages flow across the page, independent workstreams run in parallel, and merge stages span their inherited ingredient lineage. On iPhone the same graph is presented as focused step cards.
+Recipe Timeline is a universal SwiftUI app for iOS and iPadOS 27. It turns a canonical recipe graph into an editorial cooking timeline: ingredients stay on the left, stages flow across the page, independent workstreams run in parallel, and merge stages span their inherited ingredient lineage. On iPhone the same graph is presented as focused step cards.
 
 This repository contains the first vertical slice:
 
-- SwiftData recipe library with a private CloudKit configuration and an automatic local fallback.
+- SwiftData recipe library with a private CloudKit configuration, an automatic local fallback, search, sorting, and a continue-cooking shortcut.
 - URL, pasted-text, photo-library, and document-camera import UI.
 - Provider-neutral RecipeV1 JSON Schema with uncertainties instead of invented facts.
 - Deterministic graph validation and timeline layout in the shared `RecipeCore` framework.
 - Serving scaling, kitchen fractions, compatible metric/imperial conversion, and qualitative quantities.
 - Per-recipe PDF, XLSX, and PNG export using the selected serving count and unit system.
 - Prep checklist, structured editing, iPad drag/drop, and iPhone list reordering.
-- Recoverable cook sessions, dependency-ready focus, concurrent timers, notifications, display-awake lifecycle, Live Activity, and App Intent controls.
-- A privacy-preserving Cloudflare Worker with Sign in with Apple authentication, quotas, URL safety controls, layered page extraction, and an OpenAI `gpt-5.6-luna` extraction adapter.
+- Recoverable cook sessions that remember the chosen servings and units, dependency-ready focus, scaled "add now" amounts, concurrent timers, notifications, display-awake lifecycle, Live Activity, App Intent controls, and an explicit end-cooking action.
+- A "kitchen notebook" design language with Liquid Glass controls, a scaled ingredient checklist, and estimated total time along the critical path.
+- A privacy-preserving Cloudflare Worker with Sign in with Apple authentication, quotas, URL safety controls, layered page extraction, and an OpenAI Responses API extraction adapter using `gpt-6.1-terra`.
 
 Substitutions and Reminders shopping lists are intentionally left for the next slice.
 
@@ -27,7 +28,7 @@ Substitutions and Reminders shopping lists are intentionally left for the next s
 
 ## Build the app
 
-Requirements: Xcode 27, Swift 6.4, XcodeGen 2.44 or later, and an iOS/iPadOS 26-or-newer deployment device.
+Requirements: Xcode 27, Swift 6.4, XcodeGen 2.44 or later, and an iOS/iPadOS 27-or-newer deployment device.
 
 ```sh
 xcodegen generate
@@ -51,14 +52,13 @@ pnpm test
 pnpm exec wrangler deploy --dry-run
 ```
 
-Live contracts never substitute providers:
+The live contract calls the configured OpenAI model and never substitutes another:
 
 ```sh
-pnpm test:live:grok
 pnpm test:live:openai
 ```
 
-The scripts load secrets from the git-ignored `.dev.vars` and print only provider/model and validation counts. See `services/import-api/README.md` for provisioning and deployment.
+The script loads secrets from the git-ignored `.dev.vars` and prints only provider/model and validation counts. See `services/import-api/README.md` for provisioning and deployment.
 
 ## Data boundaries
 

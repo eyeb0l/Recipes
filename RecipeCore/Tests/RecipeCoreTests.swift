@@ -277,6 +277,154 @@ final class RecipeCoreTests: XCTestCase {
         let recovered = try await recoveredStore.session(id: session.id)
         XCTAssertEqual(recovered, session)
     }
+
+    func testEstimatedTotalTimeFollowsTheCriticalPathAcrossParallelWork() {
+        let recipe = SampleRecipe.espressoBrownies
+        // Melting (3 min) leads to the bake (30 min); preheating runs in parallel and adds nothing.
+        XCTAssertEqual(recipe.estimatedTotalSeconds, 1_980)
+        XCTAssertEqual(RecipeDurationFormatter.string(seconds: 1_980), "33 min")
+        XCTAssertEqual(RecipeDurationFormatter.string(seconds: 4_800), "1 hr 20 min")
+        XCTAssertEqual(RecipeDurationFormatter.string(seconds: 7_200), "2 hr")
+
+        var untimed = recipe
+        for index in untimed.stages.indices {
+            untimed.stages[index].duration = nil
+            untimed.stages[index].timers = []
+        }
+        XCTAssertNil(untimed.estimatedTotalSeconds)
+    }
+
+    func testRemovingAnIngredientClearsEveryReference() {
+        var recipe = SampleRecipe.espressoBrownies
+        recipe.uncertainties.append(.init(kind: .ambiguousQuantity, message: "The butter amount is unclear.", ingredientIDs: ["butter"]))
+        recipe.removeIngredient(id: "butter")
+
+        XCTAssertFalse(recipe.ingredients.contains { $0.id == "butter" })
+        XCTAssertEqual(recipe.ingredients.map(\.sortIndex), Array(0..<recipe.ingredients.count))
+        XCTAssertFalse(recipe.stages.flatMap(\.ingredientUses).contains { $0.ingredientID == "butter" })
+        XCTAssertFalse(recipe.prepTasks.flatMap(\.ingredientIDs).contains("butter"))
+        XCTAssertFalse(recipe.uncertainties.flatMap(\.ingredientIDs).contains("butter"))
+        XCTAssertTrue(RecipeValidator.validate(recipe).isValid, RecipeValidator.validate(recipe).issues.map(\.message).joined(separator: "\n"))
+    }
+
+    func testRemovingAStageReconnectsItsFollowers() throws {
+        var recipe = SampleRecipe.espressoBrownies
+        recipe.removeStage(id: "fold")
+
+        let bake = try XCTUnwrap(recipe.stages.first { $0.id == "bake" })
+        XCTAssertEqual(Set(bake.dependencies), Set(["preheat", "add-eggs"]))
+        XCTAssertEqual(recipe.sortedStages.map(\.sortIndex), Array(0..<recipe.stages.count))
+        XCTAssertTrue(RecipeValidator.validate(recipe).isValid, RecipeValidator.validate(recipe).issues.map(\.message).joined(separator: "\n"))
+    }
+
+    func testResumingACookSessionKeepsProgressAndAdoptsNewScaling() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("CookSession-\(UUID().uuidString).json")
+        let store = CookSessionStore(fileURL: url)
+        let recipe = SampleRecipe.espressoBrownies
+        let first = try await store.createSession(for: recipe, servings: 9, unitSystem: .metric)
+        _ = try await store.complete(stageID: "preheat", sessionID: first.id)
+
+        let resumed = try await store.createSession(for: recipe, servings: 18, unitSystem: .imperial)
+        XCTAssertEqual(resumed.id, first.id)
+        XCTAssertEqual(resumed.completedStageIDs, ["preheat"])
+        XCTAssertEqual(resumed.servings, 18)
+        XCTAssertEqual(resumed.unitSystem, .imperial)
+        XCTAssertEqual(resumed.progress, 1.0 / 6.0, accuracy: 0.000_1)
+    }
+
+    func testCookAmountsComeFromTheSnapshotTakenWhenCookingStarted() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("CookSession-\(UUID().uuidString).json")
+        let store = CookSessionStore(fileURL: url)
+        var recipe = SampleRecipe.espressoBrownies
+        let session = try await store.createSession(for: recipe, servings: 18, unitSystem: .metric)
+
+        // Editing the recipe mid-cook must not change the amounts shown beside the saved instructions.
+        let butter = try XCTUnwrap(recipe.ingredients.firstIndex { $0.id == "butter" })
+        recipe.ingredients[butter].name = "olive oil"
+        recipe.ingredients[butter].quantity = .exact(500, unit: .gram)
+        let resumed = try await store.createSession(for: recipe, servings: 18, unitSystem: .metric)
+        XCTAssertEqual(resumed.id, session.id)
+
+        let melt = try XCTUnwrap(resumed.stages.first { $0.id == "melt" })
+        XCTAssertEqual(resumed.ingredientLines(for: melt), ["230 g unsalted butter"])
+
+        var legacy = melt
+        legacy.ingredients = nil
+        XCTAssertEqual(resumed.ingredientLines(for: legacy), ["unsalted butter"])
+    }
+
+    func testTappingAnExpiredButUnreconciledTimerRestartsIt() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("CookSession-\(UUID().uuidString).json")
+        let store = CookSessionStore(fileURL: url)
+        let recipe = SampleRecipe.espressoBrownies
+        let timer = try XCTUnwrap(recipe.stages.first { $0.id == "melt" }?.timers.first)
+        let start = Date(timeIntervalSince1970: 10_000)
+        var session = try await store.createSession(for: recipe, date: start)
+        session = try await store.toggleTimer(sessionID: session.id, stageID: "melt", timer: timer, date: start)
+
+        let afterDeadline = start.addingTimeInterval(TimeInterval(timer.durationSeconds + 5))
+        session = try await store.toggleTimer(sessionID: session.id, stageID: "melt", timer: timer, date: afterDeadline)
+        let state = try XCTUnwrap(session.timers.first)
+        XCTAssertEqual(state.status, .running)
+        XCTAssertEqual(state.endDate, afterDeadline.addingTimeInterval(TimeInterval(timer.durationSeconds)))
+    }
+
+    func testEndingASessionStopsItsTimers() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("CookSession-\(UUID().uuidString).json")
+        let store = CookSessionStore(fileURL: url)
+        let recipe = SampleRecipe.espressoBrownies
+        let timer = try XCTUnwrap(recipe.stages.first { $0.id == "melt" }?.timers.first)
+        let session = try await store.createSession(for: recipe)
+        _ = try await store.toggleTimer(sessionID: session.id, stageID: "melt", timer: timer)
+
+        try await store.end(sessionID: session.id)
+        let fetched = try await store.session(id: session.id)
+        let ended = try XCTUnwrap(fetched)
+        XCTAssertNotNil(ended.endedAt)
+        XCTAssertEqual(ended.runningTimerCount, 0)
+        XCTAssertTrue(ended.timers.allSatisfy { $0.status == .cancelled && $0.endDate == nil })
+        let active = try await store.activeSession(for: recipe.id)
+        XCTAssertNil(active)
+
+        // A timer intent queued from the Live Activity before the end must not restart anything.
+        do {
+            _ = try await store.toggleTimer(sessionID: session.id, stageID: "melt", timer: timer)
+            XCTFail("An ended session must reject timer changes")
+        } catch let error as CookSessionError {
+            XCTAssertEqual(error, .sessionEnded)
+        }
+        let afterIntent = try await store.session(id: session.id)
+        XCTAssertEqual(afterIntent?.runningTimerCount, 0)
+    }
+
+    func testFinishingTheLastStageStillLetsTheCookCancelARunningTimer() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("CookSession-\(UUID().uuidString).json")
+        let store = CookSessionStore(fileURL: url)
+        let recipe = SampleRecipe.espressoBrownies
+        let bakeTimer = try XCTUnwrap(recipe.stages.first { $0.id == "bake" }?.timers.first)
+        let session = try await store.createSession(for: recipe)
+        for stageID in ["preheat", "melt", "mix-wet", "add-eggs", "fold"] {
+            _ = try await store.complete(stageID: stageID, sessionID: session.id)
+        }
+        _ = try await store.toggleTimer(sessionID: session.id, stageID: "bake", timer: bakeTimer)
+        let finished = try await store.complete(stageID: "bake", sessionID: session.id)
+        XCTAssertTrue(finished.isComplete)
+        XCTAssertFalse(finished.isAbandoned)
+
+        let cancelled = try await store.cancelTimer(timerID: "bake:\(bakeTimer.id)", sessionID: session.id)
+        XCTAssertEqual(cancelled.runningTimerCount, 0)
+    }
+
+    func testCookSessionsSavedBeforeScalingWasStoredStillDecode() throws {
+        let session = CookSession(recipe: SampleRecipe.espressoBrownies, servings: 4, unitSystem: .metric)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(session)) as? [String: Any])
+        object.removeValue(forKey: "servings")
+        object.removeValue(forKey: "unitSystem")
+        let legacy = try JSONDecoder().decode(CookSession.self, from: JSONSerialization.data(withJSONObject: object))
+        XCTAssertNil(legacy.servings)
+        XCTAssertNil(legacy.unitSystem)
+        XCTAssertEqual(legacy.stages, session.stages)
+    }
 }
 
 private extension XCTestCase {

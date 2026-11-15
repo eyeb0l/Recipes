@@ -16,9 +16,11 @@ struct PersistenceController {
         let schema = Schema([RecipeRecord.self])
         let process = ProcessInfo.processInfo
         let isTesting = process.arguments.contains("--ui-testing")
+            || process.environment["RECIPE_TIMELINE_IN_MEMORY_STORE"] == "1"
             || process.environment["XCTestConfigurationFilePath"] != nil
         if isTesting {
-            let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            // Tests never sync: an unsigned test build has no CloudKit entitlement to set up.
+            let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
             return makeContainer(schema: schema, configuration: configuration, mode: .inMemory)
         }
 

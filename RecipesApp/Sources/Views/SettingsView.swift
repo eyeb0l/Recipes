@@ -1,14 +1,24 @@
 import AuthenticationServices
+import RecipeCore
 import SwiftUI
 
 struct SettingsView: View {
     let persistence: PersistenceController
     @Environment(AuthSession.self) private var auth
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(AppPreferenceKey.unitSystem) private var units: UnitSystemPreference = .metric
+
+    private var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = info?["CFBundleVersion"] as? String ?? "—"
+        return "\(version) (\(build))"
+    }
 
     var body: some View {
         NavigationStack {
             Form {
+                Group {
                 Section("Recipe import") {
                     switch auth.state {
                     case .signedIn:
@@ -32,10 +42,26 @@ struct SettingsView: View {
                             .foregroundStyle(RecipeTheme.warning)
                     }
                 }
+                Section {
+                    Picker("Units", selection: $units) {
+                        ForEach(UnitSystemPreference.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                    }
+                } header: {
+                    Text("Display")
+                } footer: {
+                    Text("Used for imports, recipes, and cook mode. You can also switch units on any recipe. Each recipe keeps its original amounts.")
+                }
                 Section("Privacy") {
                     Text("The import service doesn't keep your source or imported recipe. The app saves cleaned source text only in your private library.")
                 }
+                Section("About") {
+                    LabeledContent("Version", value: appVersion)
+                }
+                }
+                .listRowBackground(RecipeTheme.surface)
             }
+            .scrollContentBackground(.hidden)
+            .background(RecipeTheme.paper)
             .navigationTitle("Settings")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
