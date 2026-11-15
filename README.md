@@ -13,7 +13,7 @@ It's a universal app for iPhone and iPad running iOS and iPadOS 27.
   &nbsp;
   <img src="docs/images/iphone-method.png" width="30%" alt="Method on iPhone, with each stage telling you what to add now and what done looks like">
   &nbsp;
-  <img src="docs/images/iphone-cook.png" width="30%" alt="Cook mode on iPhone, focused on the current stage with other ready stages listed below">
+  <img src="docs/images/iphone-cook.png" width="30%" alt="Cook mode on iPhone in dark mode, focused on the current stage with other ready stages listed below">
 </p>
 
 ## What it does

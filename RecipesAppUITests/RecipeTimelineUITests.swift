@@ -40,13 +40,18 @@ final class RecipeTimelineUITests: XCTestCase {
         attachScreenshot(named: "timeline-tail")
     }
 
-    func testDarkCookModeSnapshot() {
+    func testDarkCookModeSnapshot() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing", "-AppleInterfaceStyle", "Dark"]
+        app.launchArguments = ["--ui-testing", "--ui-testing-dark"]
         app.launch()
         openSampleRecipe(in: app)
         app.buttons["start-cooking"].tap()
         XCTAssertTrue(app.staticTexts["cook-mode-title"].waitForExistence(timeout: 5))
+
+        let screenshot = XCUIScreen.main.screenshot()
+        // The page margin shows the paper colour, which is near-black in dark mode and cream in light mode.
+        let margin = try XCTUnwrap(luminance(of: screenshot.image, at: CGPoint(x: 0.015, y: 0.5)))
+        XCTAssertLessThan(margin, 0.2, "Cook mode should render with the dark palette")
         attachScreenshot(named: "cook-mode-dark")
     }
 
@@ -227,6 +232,26 @@ final class RecipeTimelineUITests: XCTestCase {
             recipe.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
         }
         XCTAssertTrue(startCooking.waitForExistence(timeout: 5))
+    }
+
+    /// Relative luminance (0–1) of the pixel at a normalised point in an image.
+    private func luminance(of image: UIImage, at point: CGPoint) -> Double? {
+        guard let cgImage = image.cgImage else { return nil }
+        let x = Int(Double(cgImage.width - 1) * point.x)
+        let y = Int(Double(cgImage.height - 1) * point.y)
+        guard let pixel = cgImage.cropping(to: CGRect(x: x, y: y, width: 1, height: 1)) else { return nil }
+        var rgba = [UInt8](repeating: 0, count: 4)
+        guard let context = CGContext(
+            data: &rgba,
+            width: 1,
+            height: 1,
+            bitsPerComponent: 8,
+            bytesPerRow: 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        context.draw(pixel, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        return (0.2126 * Double(rgba[0]) + 0.7152 * Double(rgba[1]) + 0.0722 * Double(rgba[2])) / 255
     }
 
     private func attachScreenshot(named name: String) {

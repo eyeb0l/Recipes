@@ -49,7 +49,7 @@ The project compiles all app, framework, Live Activity, unit-test, and UI-test b
 
 ### README screenshots
 
-The screenshots in `docs/images/` come from the snapshot UI tests (`testEditorialTimelineSnapshot`, `testRecipeDetailSnapshots`, and `testDarkCookModeSnapshot`), run on an iPad Pro 13-inch and an iPhone 18 Pro simulator. Uninstall the app from the simulator first so a cook session from a previous run doesn't show up, then export the attachments from the result bundle:
+The screenshots in `docs/images/` come from the snapshot UI tests (`testEditorialTimelineSnapshot`, `testRecipeDetailSnapshots`, and `testDarkCookModeSnapshot`), run on an iPad Pro 13-inch and an iPhone 18 Pro simulator. The cook-mode test launches the app with `--ui-testing-dark`, so that screenshot is in dark mode. Uninstall the app from the simulator first so a cook session from a previous run doesn't show up, then export the attachments from the result bundle:
 
 ```sh
 xcrun xcresulttool export attachments --path TestResults.xcresult --output-path screenshots
