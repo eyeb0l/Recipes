@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  import-api:
+    name: Import API
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: services/import-api
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: services/import-api/package.json
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: services/import-api/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm exec wrangler deploy --dry-run
+
+  ios:
+    name: iOS app
+    runs-on: xcode-27
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+      DESTINATION: platform=iOS Simulator,name=iPhone 18 Pro,OS=27.2
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the Xcode project matches project.yml
+        run: |
+          brew install xcodegen
+          xcodegen generate
+          if ! git diff --exit-code -- RecipeTimeline.xcodeproj; then
+            echo "::error::RecipeTimeline.xcodeproj is out of date. Run 'xcodegen generate' and commit the result."
+            exit 1
+          fi
+
+      - name: Build app, extension and test bundles
+        run: |
+          xcodebuild build-for-testing \
+            -project RecipeTimeline.xcodeproj \
+            -scheme RecipeTimeline \
+            -destination "$DESTINATION" \
+            -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Run unit tests
+        run: |
+          xcodebuild test-without-building \
+            -project RecipeTimeline.xcodeproj \
+            -scheme RecipeTimeline \
+            -destination "$DESTINATION" \
+            -derivedDataPath DerivedData \
+            -only-testing:RecipeCoreTests \
+            -only-testing:RecipeTimelineTests \
+            -resultBundlePath TestResults.xcresult
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-test-results
+          path: TestResults.xcresult
+          retention-days: 7
