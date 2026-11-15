@@ -27,12 +27,28 @@ struct AppRootView: View {
 
     var body: some View {
         @Bindable var router = router
-        Group {
-            if horizontalSizeClass == .compact {
-                compactNavigation
+        // One split view for every width: it collapses to a stack when compact, so the open recipe
+        // and its state survive folding iPhone Duo, rotating, or resizing the window.
+        NavigationSplitView {
+            RecipeLibrary(records: records, selection: $router.selectedRecipeID)
+                .navigationTitle("Recipes")
+                // An inline title shares the sidebar's bar with four buttons and truncates to "Re…".
+                .navigationBarTitleDisplayMode(.large)
+                .toolbar { libraryToolbar }
+        } detail: {
+            if let selected = selectedRecord {
+                RecipeDetailView(record: selected)
+                    .id(selected.id)
             } else {
-                splitNavigation
+                EmptyLibraryDetail(onImport: { router.presentedSheet = .importRecipe })
             }
+        }
+        .navigationSplitViewStyle(.balanced)
+        .onChange(of: records.map(\.id), initial: true) { _, ids in
+            reconcileSelection(with: ids)
+        }
+        .onChange(of: horizontalSizeClass) {
+            reconcileSelection(with: records.map(\.id))
         }
         .editorialSurface()
         .sheet(item: $router.presentedSheet) { sheet in
@@ -64,39 +80,14 @@ struct AppRootView: View {
         }
     }
 
-    private var splitNavigation: some View {
-        @Bindable var router = router
-        return NavigationSplitView {
-            RecipeLibrary(records: records, selection: $router.selectedRecipeID)
-                .navigationTitle("Recipes")
-                .toolbar { libraryToolbar }
-        } detail: {
-            if let selected = selectedRecord {
-                RecipeDetailView(record: selected)
-                    .id(selected.id)
-            } else {
-                EmptyLibraryDetail(onImport: { router.presentedSheet = .importRecipe })
-            }
+    private func reconcileSelection(with ids: [String]) {
+        if let selected = router.selectedRecipeID, !ids.contains(selected) {
+            router.selectedRecipeID = nil
         }
-        .navigationSplitViewStyle(.balanced)
-        .onChange(of: records.map(\.id), initial: true) { _, ids in
-            // Keep the sidebar highlight in step with the recipe shown in the detail column.
-            if router.selectedRecipeID.map({ !ids.contains($0) }) ?? true {
-                router.selectedRecipeID = ids.first
-            }
-        }
-    }
-
-    private var compactNavigation: some View {
-        NavigationStack {
-            RecipeLibrary(records: records, selection: nil)
-                .navigationTitle("Recipes")
-                .toolbar { libraryToolbar }
-                .navigationDestination(for: String.self) { id in
-                    if let record = records.first(where: { $0.id == id }) {
-                        RecipeDetailView(record: record)
-                    }
-                }
+        // Side by side, keep the sidebar highlight in step with the recipe shown in the detail column.
+        // Collapsed, a selection pushes the recipe, so leave the library showing until one is chosen.
+        if horizontalSizeClass == .regular, router.selectedRecipeID == nil {
+            router.selectedRecipeID = ids.first
         }
     }
 
@@ -124,7 +115,7 @@ private struct PendingDeletion: Equatable {
 
 private struct RecipeLibrary: View {
     let records: [RecipeRecord]
-    let selection: Binding<String?>?
+    let selection: Binding<String?>
     @Environment(\.modelContext) private var modelContext
     @Environment(AppRouter.self) private var router
     @AppStorage(AppPreferenceKey.librarySort) private var sort: LibrarySort = .recentlyUpdated
@@ -136,12 +127,8 @@ private struct RecipeLibrary: View {
         Group {
             if records.isEmpty {
                 emptyLibrary
-            } else if let selection {
-                List(selection: selection) { content }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
             } else {
-                List { content }
+                List(selection: selection) { content }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
             }
@@ -180,7 +167,7 @@ private struct RecipeLibrary: View {
                 .listRowBackground(Color.clear)
         }
         ForEach(visible) { record in
-            let isSelected = selection?.wrappedValue == record.id
+            let isSelected = selection.wrappedValue == record.id
             NavigationLink(value: record.id) {
                 RecipeLibraryRow(record: record, isCooking: activeSessions.contains { $0.recipeID == record.id })
                     .padding(14)
