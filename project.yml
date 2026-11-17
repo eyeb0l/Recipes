@@ -19,6 +19,16 @@ settings:
     APP_GROUP_IDENTIFIER: group.com.irisgiertuga.RecipeTimeline
     ICLOUD_CONTAINER_IDENTIFIER: iCloud.com.irisgiertuga.RecipeTimeline
     IMPORT_API_BASE_URL: https://recipe-timeline-import-api.iris-account.workers.dev
+  # Pin the CloudKit and push environments per configuration. Without them, development-signed
+  # builds talk to the Production CloudKit environment, which rejects record types that haven't
+  # been deployed from Development, so nothing ever uploads.
+  configs:
+    Debug:
+      ICLOUD_CONTAINER_ENVIRONMENT: Development
+      APS_ENVIRONMENT: development
+    Release:
+      ICLOUD_CONTAINER_ENVIRONMENT: Production
+      APS_ENVIRONMENT: production
 
 targets:
   RecipeCore:
@@ -80,6 +90,8 @@ targets:
           - $(ICLOUD_CONTAINER_IDENTIFIER)
         com.apple.developer.icloud-services:
           - CloudKit
+        com.apple.developer.icloud-container-environment: $(ICLOUD_CONTAINER_ENVIRONMENT)
+        aps-environment: $(APS_ENVIRONMENT)
         com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)
     dependencies:
       - target: RecipeCore

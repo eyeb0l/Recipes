@@ -7,6 +7,7 @@ struct RecipeTimelineApp: App {
     private let persistence: PersistenceController
     @State private var router = AppRouter()
     @State private var authSession = AuthSession()
+    @State private var cloudSync = CloudSyncMonitor()
     /// UI tests force dark mode with a launch argument rather than changing the simulator's
     /// appearance, which is global state and makes iOS relaunch apps in the background.
     private let uiTestingColorScheme: ColorScheme? =
@@ -21,6 +22,7 @@ struct RecipeTimelineApp: App {
             AppRootView(persistence: persistence)
                 .environment(router)
                 .environment(authSession)
+                .environment(cloudSync)
                 .onOpenURL { router.handle(url: $0) }
                 .preferredColorScheme(uiTestingColorScheme)
         }

@@ -5,6 +5,7 @@ import SwiftUI
 struct SettingsView: View {
     let persistence: PersistenceController
     @Environment(AuthSession.self) private var auth
+    @Environment(CloudSyncMonitor.self) private var cloudSync
     @Environment(\.dismiss) private var dismiss
     @AppStorage(AppPreferenceKey.unitSystem) private var units: UnitSystemPreference = .metric
 
@@ -36,6 +37,9 @@ struct SettingsView: View {
                 }
                 Section("Recipe library") {
                     LabeledContent("Storage", value: persistence.mode == .iCloud ? "iCloud" : "On this device")
+                    if persistence.mode == .iCloud {
+                        syncStatus
+                    }
                     if let error = persistence.setupError {
                         Text("iCloud isn't available, so this library is stored on this device. \(error)")
                             .font(.footnote)
@@ -68,6 +72,27 @@ struct SettingsView: View {
             }
         }
         .editorialSurface()
+    }
+
+    @ViewBuilder
+    private var syncStatus: some View {
+        // Re-render every half minute so "5 minutes ago" keeps counting while Settings is open.
+        TimelineView(.periodic(from: .now, by: 30)) { context in
+            LabeledContent("Last synced") {
+                if cloudSync.isSyncing {
+                    Text("Syncing…")
+                } else if let date = cloudSync.lastSyncDate {
+                    Text(CloudSyncMonitor.lastSyncedDescription(for: date, relativeTo: context.date))
+                } else {
+                    Text("Not yet")
+                }
+            }
+        }
+        if let message = cloudSync.errorMessage {
+            Label(message, systemImage: "exclamationmark.icloud")
+                .font(.footnote)
+                .foregroundStyle(RecipeTheme.warning)
+        }
     }
 
     private var appleButton: some View {

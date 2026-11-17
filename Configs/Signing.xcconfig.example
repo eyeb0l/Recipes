@@ -3,3 +3,6 @@ DEVELOPMENT_TEAM = 359794K46A
 PRODUCT_BUNDLE_IDENTIFIER = com.irisgiertuga.RecipeTimeline
 APP_GROUP_IDENTIFIER = group.com.irisgiertuga.RecipeTimeline
 ICLOUD_CONTAINER_IDENTIFIER = iCloud.com.irisgiertuga.RecipeTimeline
+// Debug builds use the Development CloudKit and push environments; Release builds use Production.
+ICLOUD_CONTAINER_ENVIRONMENT = Development
+APS_ENVIRONMENT = development
