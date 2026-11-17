@@ -189,6 +189,7 @@ extension RecipeSourceType {
 enum AppPreferenceKey {
     static let unitSystem = "preferredUnitSystem"
     static let librarySort = "librarySort"
+    static let lastCloudSync = "lastCloudSyncDate"
 }
 
 /// Lays out children left to right, wrapping to a new line when the next child would not fit.

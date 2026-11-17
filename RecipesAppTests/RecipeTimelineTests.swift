@@ -1,3 +1,4 @@
+import CloudKit
 import CoreGraphics
 import RecipeCore
 import SwiftData
@@ -247,6 +248,86 @@ final class RecipeTimelineTests: XCTestCase {
         }
         XCTAssertFalse(auth.isAuthenticated)
         XCTAssertEqual(auth.state, .signedOut)
+    }
+
+    @MainActor
+    func testCloudSyncMonitorRecordsTheLastSuccessfulSyncAndKeepsIt() throws {
+        let suite = "CloudSyncMonitorTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let monitor = CloudSyncMonitor(defaults: defaults, notificationCenter: NotificationCenter())
+        XCTAssertNil(monitor.lastSyncDate)
+
+        let id = UUID()
+        let finished = Date(timeIntervalSince1970: 1_800_000_000)
+        monitor.record(Self.syncEvent(id: id, kind: .import, endDate: nil))
+        XCTAssertTrue(monitor.isSyncing)
+        monitor.record(Self.syncEvent(id: id, kind: .import, endDate: finished))
+        XCTAssertFalse(monitor.isSyncing)
+        XCTAssertEqual(monitor.lastSyncDate, finished)
+
+        // Setup isn't a sync, and an older event finishing late mustn't move the date backwards.
+        monitor.record(Self.syncEvent(kind: .setup, endDate: finished.addingTimeInterval(60)))
+        monitor.record(Self.syncEvent(kind: .export, endDate: finished.addingTimeInterval(-60)))
+        XCTAssertEqual(monitor.lastSyncDate, finished)
+
+        let relaunched = CloudSyncMonitor(defaults: defaults, notificationCenter: NotificationCenter())
+        XCTAssertEqual(relaunched.lastSyncDate, finished)
+    }
+
+    @MainActor
+    func testCloudSyncMonitorKeepsAnExportFailureUntilAnExportSucceeds() throws {
+        let suite = "CloudSyncMonitorTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let monitor = CloudSyncMonitor(defaults: defaults, notificationCenter: NotificationCenter())
+
+        monitor.record(Self.syncEvent(kind: .export, endDate: .now, succeeded: false, error: "Upload rejected"))
+        XCTAssertEqual(monitor.errorMessage, "Upload rejected")
+        // Downloads still working doesn't mean this device's changes are reaching iCloud.
+        monitor.record(Self.syncEvent(kind: .import, endDate: .now))
+        XCTAssertEqual(monitor.errorMessage, "Upload rejected")
+        monitor.record(Self.syncEvent(kind: .export, endDate: .now))
+        XCTAssertNil(monitor.errorMessage)
+    }
+
+    @MainActor
+    func testCloudSyncMessagesExplainTheRecordThatFailedAPartialFailure() {
+        let rejected = CKError(.invalidArguments, userInfo: [
+            NSLocalizedDescriptionKey: "Cannot create new type CD_RecipeRecord in production schema",
+        ])
+        let partial = CKError(.partialFailure, userInfo: [
+            CKPartialErrorsByItemIDKey: [
+                CKRecord.ID(recordName: "a"): CKError(.batchRequestFailed),
+                CKRecord.ID(recordName: "b"): rejected,
+            ],
+        ])
+        XCTAssertEqual(CloudSyncMonitor.message(for: partial), "Cannot create new type CD_RecipeRecord in production schema")
+        XCTAssertEqual(
+            CloudSyncMonitor.message(for: CKError(.notAuthenticated)),
+            "Sign in to iCloud in the Settings app to sync your recipes."
+        )
+        XCTAssertEqual(
+            CloudSyncMonitor.message(for: CKError(.quotaExceeded)),
+            "Your iCloud storage is full, so recipe changes can't upload."
+        )
+    }
+
+    @MainActor
+    func testLastSyncedDescriptionSaysJustNowForTheFirstMinute() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        XCTAssertEqual(CloudSyncMonitor.lastSyncedDescription(for: now.addingTimeInterval(-20), relativeTo: now), "Just now")
+        XCTAssertNotEqual(CloudSyncMonitor.lastSyncedDescription(for: now.addingTimeInterval(-600), relativeTo: now), "Just now")
+    }
+
+    private static func syncEvent(
+        id: UUID = UUID(),
+        kind: CloudSyncEvent.Kind,
+        endDate: Date?,
+        succeeded: Bool = true,
+        error: String? = nil
+    ) -> CloudSyncEvent {
+        CloudSyncEvent(id: id, kind: kind, endDate: endDate, succeeded: endDate != nil && succeeded, errorMessage: error)
     }
 
     private static func expiredAccessTokens() -> SessionTokens {

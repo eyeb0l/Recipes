@@ -29,7 +29,13 @@ Unsigned builds have no iCloud or App Group entitlements, so they keep the recip
 
 ### Signing and identifiers
 
-Device and TestFlight builds use Apple Developer team `359794K46A`, the app identifier `com.irisgiertuga.RecipeTimeline`, and matching App Group and iCloud identifiers declared in `project.yml`. Regenerate the project after changing these values. `Configs/Signing.xcconfig.example` records the coordinated identifier set; it is not loaded automatically, so it cannot silently override generated target identifiers.
+Device and TestFlight builds use Apple Developer team `359794K46A`, the app identifier `com.irisgiertuga.RecipeTimeline`, and matching App Group and iCloud identifiers declared in `project.yml`. Regenerate the project after changing these values.
+
+### iCloud environments
+
+Debug builds sign with the Development CloudKit and push environments; Release builds, including TestFlight and the App Store, use Production. The two environments hold separate data, so recipes saved by an Xcode build don't appear in a TestFlight build, and vice versa.
+
+CloudKit creates record types in Development automatically, but Production only accepts types that have been deployed. After a model change, run a Debug build that saves a recipe, then open the container in the [CloudKit Console](https://icloud.developer.apple.com/) and choose **Deploy Schema Changes** before shipping a Release build. If you skip this, Release builds keep every recipe on the device and log `Cannot create new type CD_RecipeRecord in production schema`. `Configs/Signing.xcconfig.example` records the coordinated identifier set; it is not loaded automatically, so it cannot silently override generated target identifiers.
 
 ### Import endpoint
 
