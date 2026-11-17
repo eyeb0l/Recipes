@@ -282,27 +282,45 @@ final class RecipeTimelineTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
         let monitor = CloudSyncMonitor(defaults: defaults, notificationCenter: NotificationCenter())
 
-        monitor.record(Self.syncEvent(kind: .export, endDate: .now, succeeded: false, error: "Upload rejected"))
-        XCTAssertEqual(monitor.errorMessage, "Upload rejected")
+        let start = Date.now
+        monitor.record(Self.syncEvent(kind: .export, endDate: start, succeeded: false, error: "Upload rejected"))
+        monitor.record(Self.syncEvent(kind: .export, endDate: start.addingTimeInterval(20), succeeded: false, error: "Upload rejected"))
+        XCTAssertNil(monitor.errorMessage(at: start.addingTimeInterval(29)))
         // Downloads still working doesn't mean this device's changes are reaching iCloud.
-        monitor.record(Self.syncEvent(kind: .import, endDate: .now))
-        XCTAssertEqual(monitor.errorMessage, "Upload rejected")
-        monitor.record(Self.syncEvent(kind: .export, endDate: .now))
-        XCTAssertNil(monitor.errorMessage)
+        let deadline = start.addingTimeInterval(30)
+        monitor.record(Self.syncEvent(kind: .import, endDate: deadline))
+        XCTAssertEqual(monitor.errorMessage(at: deadline), "Upload rejected")
+        monitor.record(Self.syncEvent(kind: .export, endDate: deadline))
+        XCTAssertNil(monitor.errorMessage(at: deadline))
+    }
+
+    @MainActor
+    func testQuickImportRecoveryNeverShowsAWarning() throws {
+        let suite = "CloudSyncMonitorTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let monitor = CloudSyncMonitor(defaults: defaults, notificationCenter: NotificationCenter())
+        let start = Date.now
+        monitor.record(Self.syncEvent(kind: .import, endDate: start, succeeded: false))
+        let retry = UUID()
+        monitor.record(Self.syncEvent(id: retry, kind: .import, endDate: nil))
+        XCTAssertTrue(monitor.isSyncing)
+        XCTAssertNil(monitor.errorMessage(at: start.addingTimeInterval(1)))
+        let recovered = start.addingTimeInterval(2)
+        monitor.record(Self.syncEvent(id: retry, kind: .import, endDate: recovered))
+        XCTAssertEqual(monitor.lastSyncDate, recovered)
+        XCTAssertNil(monitor.errorMessage(at: start.addingTimeInterval(60)))
     }
 
     @MainActor
     func testCloudSyncMessagesExplainTheRecordThatFailedAPartialFailure() {
-        let rejected = CKError(.invalidArguments, userInfo: [
-            NSLocalizedDescriptionKey: "Cannot create new type CD_RecipeRecord in production schema",
-        ])
         let partial = CKError(.partialFailure, userInfo: [
             CKPartialErrorsByItemIDKey: [
                 CKRecord.ID(recordName: "a"): CKError(.batchRequestFailed),
-                CKRecord.ID(recordName: "b"): rejected,
+                CKRecord.ID(recordName: "b"): CKError(.quotaExceeded),
             ],
         ])
-        XCTAssertEqual(CloudSyncMonitor.message(for: partial), "Cannot create new type CD_RecipeRecord in production schema")
+        XCTAssertEqual(CloudSyncMonitor.message(for: partial), "Your iCloud storage is full, so recipe changes can't upload.")
         XCTAssertEqual(
             CloudSyncMonitor.message(for: CKError(.notAuthenticated)),
             "Sign in to iCloud in the Settings app to sync your recipes."
@@ -311,6 +329,13 @@ final class RecipeTimelineTests: XCTestCase {
             CloudSyncMonitor.message(for: CKError(.quotaExceeded)),
             "Your iCloud storage is full, so recipe changes can't upload."
         )
+    }
+
+    func testCloudSyncWarningKeepsZoneDiagnosticsOutOfSettings() {
+        let error = NSError(domain: NSCocoaErrorDomain, code: 1, userInfo: [
+            NSLocalizedDescriptionKey: "Error fetching changes in zone <CKRecordZoneID>: client knowledge differs from server knowledge",
+        ])
+        XCTAssertEqual(CloudSyncMonitor.message(for: error), "iCloud couldn't finish syncing your recipes.")
     }
 
     @MainActor
