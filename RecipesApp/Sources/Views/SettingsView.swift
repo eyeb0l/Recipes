@@ -76,22 +76,24 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var syncStatus: some View {
-        // Re-render every half minute so "5 minutes ago" keeps counting while Settings is open.
+        // Refresh the relative date and any outstanding warning while Settings is open.
         TimelineView(.periodic(from: .now, by: 30)) { context in
-            LabeledContent("Last synced") {
-                if cloudSync.isSyncing {
-                    Text("Syncing…")
-                } else if let date = cloudSync.lastSyncDate {
-                    Text(CloudSyncMonitor.lastSyncedDescription(for: date, relativeTo: context.date))
-                } else {
-                    Text("Not yet")
+            VStack(alignment: .leading, spacing: 8) {
+                LabeledContent("Last synced") {
+                    if cloudSync.isSyncing {
+                        Text("Syncing…")
+                    } else if let date = cloudSync.lastSyncDate {
+                        Text(CloudSyncMonitor.lastSyncedDescription(for: date, relativeTo: context.date))
+                    } else {
+                        Text("Not yet")
+                    }
+                }
+                if let message = cloudSync.errorMessage(at: context.date) {
+                    Label(message, systemImage: "exclamationmark.icloud")
+                        .font(.footnote)
+                        .foregroundStyle(RecipeTheme.warning)
                 }
             }
-        }
-        if let message = cloudSync.errorMessage {
-            Label(message, systemImage: "exclamationmark.icloud")
-                .font(.footnote)
-                .foregroundStyle(RecipeTheme.warning)
         }
     }
 

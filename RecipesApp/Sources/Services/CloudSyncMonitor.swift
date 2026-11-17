@@ -2,6 +2,7 @@ import CloudKit
 import CoreData
 import Foundation
 import Observation
+import OSLog
 
 /// One CloudKit mirroring event, copied out of the non-Sendable `NSPersistentCloudKitContainer.Event`.
 struct CloudSyncEvent: Equatable, Sendable {
@@ -43,13 +44,13 @@ final class CloudSyncMonitor {
     /// When an import or export last finished successfully. Persists between launches.
     private(set) var lastSyncDate: Date?
     private(set) var isSyncing = false
-    /// The most recent failure that hasn't been followed by a success of the same kind.
-    var errorMessage: String? {
-        // Export failures matter most: they mean this device's changes aren't reaching iCloud.
-        failures[.export] ?? failures[.import] ?? failures[.setup]
+    private struct Failure {
+        let firstSeen: Date
+        let message: String
     }
 
-    private var failures: [CloudSyncEvent.Kind: String] = [:]
+    private static let warningDelay: TimeInterval = 30
+    private var failures: [CloudSyncEvent.Kind: Failure] = [:]
     private var runningEvents: Set<UUID> = []
     private let defaults: UserDefaults
     @ObservationIgnored private nonisolated(unsafe) var observer: (any NSObjectProtocol)?
@@ -87,7 +88,10 @@ final class CloudSyncMonitor {
         isSyncing = !runningEvents.isEmpty
 
         guard event.succeeded else {
-            failures[event.kind] = event.errorMessage ?? "iCloud sync failed."
+            failures[event.kind] = Failure(
+                firstSeen: failures[event.kind]?.firstSeen ?? endDate,
+                message: event.errorMessage ?? Self.genericFailureMessage
+            )
             return
         }
         failures[event.kind] = nil
@@ -97,11 +101,24 @@ final class CloudSyncMonitor {
         }
     }
 
+    /// Allow a quick retry to finish. An unresolved upload takes priority once its warning is due.
+    func errorMessage(at date: Date) -> String? {
+        for kind: CloudSyncEvent.Kind in [.export, .import, .setup] {
+            if let failure = failures[kind], date.timeIntervalSince(failure.firstSeen) >= Self.warningDelay {
+                return failure.message
+            }
+        }
+        return nil
+    }
+
     /// "Just now" for the first minute, so the row doesn't count seconds after every save.
     nonisolated static func lastSyncedDescription(for date: Date, relativeTo now: Date = .now) -> String {
         if now.timeIntervalSince(date) < 60 { return "Just now" }
         return date.formatted(.relative(presentation: .named, unitsStyle: .wide))
     }
+
+    private nonisolated static let genericFailureMessage = "iCloud couldn't finish syncing your recipes."
+    private nonisolated static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "RecipeTimeline", category: "CloudSync")
 
     nonisolated static func message(for error: any Error) -> String {
         let ckError = (error as? CKError).map(firstMeaningfulError(in:))
@@ -115,7 +132,8 @@ final class CloudSyncMonitor {
         case .networkUnavailable, .networkFailure, .serviceUnavailable, .requestRateLimited, .zoneBusy:
             return "iCloud can't be reached right now. Recipes will sync when it's back."
         default:
-            return (ckError ?? error).localizedDescription
+            logger.debug("iCloud sync failed: \((ckError ?? error).localizedDescription, privacy: .private)")
+            return genericFailureMessage
         }
     }
 
