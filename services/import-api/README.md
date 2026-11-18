@@ -33,6 +33,10 @@ URL imports reject credentials, non-HTTP protocols, local/private/link-local/res
 
 For serving counts, an unambiguous structured `recipeYield` is authoritative and is reconciled after model extraction. If structured data does not establish a count, readable page text is included for model extraction. Only the model's explicit `1`/`null` missing-yield fallback becomes a placeholder serving with a plain-language warning.
 
+Pints and fluid ounces come in US (`pint`, `fluidOunce`) and UK imperial (`imperialPint`, `imperialFluidOunce`) sizes. The model chooses from the source alone: the quantity's own wording, then a metric equivalent beside it, then the rest of the recipe and the page's declared language, never the user's locale. When the source doesn't settle it, the model keeps the US unit and adds an `ambiguousQuantity` warning. After extraction, a quantity's own wording overrides the model: "UK pint" or "US pint", or a single metric equivalent within 8% of one pint size, such as "½ pint (300 ml)". A stage allocation with no such wording follows its ingredient.
+
+Import requests list the RecipeV1 units the app can decode in `supportedUnits`. App builds released before the UK units don't send it, so they receive UK amounts as exact millilitres, with `originalText` unchanged, instead of a recipe they can't decode. A unit missing from a list the app does send is rewritten the same way.
+
 ## Live publisher compatibility
 
 Run the production fetch and parser path against public recipe URLs with:

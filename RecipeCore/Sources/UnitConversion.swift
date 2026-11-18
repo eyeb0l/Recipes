@@ -34,7 +34,7 @@ public enum CulinaryUnits {
         switch unit {
         case .gram, .kilogram, .ounce, .pound:
             .mass
-        case .milliliter, .liter, .teaspoon, .tablespoon, .cup, .fluidOunce, .pint, .shot:
+        case .milliliter, .liter, .teaspoon, .tablespoon, .cup, .fluidOunce, .pint, .imperialFluidOunce, .imperialPint, .shot:
             .volume
         case .celsius, .fahrenheit:
             .temperature
@@ -88,6 +88,8 @@ public enum CulinaryUnits {
         case .cup: Decimal(string: "236.5882365")!
         case .fluidOunce: Decimal(string: "29.5735295625")!
         case .pint: Decimal(string: "473.176473")!
+        case .imperialFluidOunce: Decimal(string: "28.4130625")!
+        case .imperialPint: Decimal(string: "568.26125")!
         case .shot: 30
         default: 1
         }
@@ -222,6 +224,8 @@ public enum CulinaryUnits {
         case .cup: plural ? "cups" : "cup"
         case .fluidOunce: "fl oz"
         case .pint: plural ? "pints" : "pint"
+        case .imperialFluidOunce: "UK fl oz"
+        case .imperialPint: plural ? "UK pints" : "UK pint"
         case .celsius: "°C"
         case .fahrenheit: "°F"
         case .count: ""

@@ -51,6 +51,16 @@ Serving-count resolution:
 - When the source content does not establish a serving count, set yield.servings to 1, yield.label to null, and add exactly one unresolved warning with id \"missing-serving-count\", kind \"other\", severity \"warning\", empty ingredientIDs and stageIDs, null sourceEvidence, and the exact message \"The recipe doesn't say how many it serves, so the app shows 1.\"
 - Never use the id \"missing-serving-count\" for any other uncertainty.`;
 
+/** How the model chooses between US and UK pints and fluid ounces. Exported for tests. */
+export const systemDependentUnitRules = `- Pints and fluid ounces differ between the US and the UK. Use "pint" and "fluidOunce" for US measures, and "imperialPint" (568 ml) and "imperialFluidOunce" (28.4 ml) for UK imperial ones. Cups, teaspoons and tablespoons have no UK units; keep them as written.
+- Decide which the source means from the source alone, strongest evidence first:
+  1. The quantity's own wording: "UK pint", "imperial pint" or "British pint" is imperial; "US pint" or "American pint" is US.
+  2. A metric equivalent beside it: about 570-600 ml per pint, such as "1/2 pint (300 ml)" or "1 pint (568 ml)", is imperial; about 470-500 ml per pint, such as "1 pint (475 ml)", is US.
+  3. The rest of the source. Pointing to imperial: a UK or Irish site, British ingredient names (plain flour, caster sugar, double cream, courgette, aubergine) or gas marks. Pointing to US: cups, sticks of butter, oven temperatures only in Fahrenheit, or American names (all-purpose flour, heavy cream, zucchini, eggplant).
+- Use one system for every pint and fluid ounce in a recipe unless the source itself mixes them.
+- The user's locale and display preference describe the cook, not the recipe. Never use them to choose between US and UK measures.
+- If the source doesn't settle it, use "pint" or "fluidOunce" and add one uncertainty of kind "ambiguousQuantity" and severity "warning", linked to every affected ingredient, saying the recipe doesn't say whether it means UK or US pints (or fluid ounces). For example: "The recipe doesn't say whether the milk is in UK pints (568 ml) or US pints (473 ml)."`;
+
 const sourceTextExcerptLimit = 15_000;
 
 interface TextInterval {
@@ -181,6 +191,7 @@ Rules:
 - yield.servings is a count of portions, must be at least 1, and must never be converted as a mass or volume.
 - Set provenance.sourceType to ${source.sourceType}, provenance.url to ${source.sourceURL ?? "null"}, and schemaVersion to 1.
 - The user's locale is ${source.locale}; their display-unit preference is ${source.preferredUnitSystem}, but preserve source quantities.
+${systemDependentUnitRules}${source.sourceLanguage ? `\n\nThe source page declares its language as ${source.sourceLanguage}. Many sites keep their platform's default, so this is a weak hint.` : ""}
 
 Source content:
 ${sourcePayload.slice(0, 45_000)}${authoritativeServingEvidence}${sourceTextFallback}${ocr}`;

@@ -233,11 +233,13 @@ public enum ShoppingList {
     }
 
     /// Unit symbols written as more than one word, such as "fl oz", and the single word used in their place.
+    /// Longest first, so "UK fl oz" is joined whole before "fl oz" can split it.
     private static let multiWordSymbols: [(String, String)] = UnitID.allCases.flatMap { unit in
         [false, true].map { CulinaryUnits.symbol(for: unit, plural: $0) }
             .filter { $0.contains(" ") }
             .map { ($0, $0.replacingOccurrences(of: " ", with: "")) }
     }
+    .sorted { $0.0.count > $1.0.count }
 
     /// Weight and volume unit symbols, keyed by stem, and a stand-in for what they measure. Scaling or
     /// switching unit system can change "g" to "kg" or "oz", but never weight to volume.

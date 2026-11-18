@@ -6,6 +6,7 @@ import type { Fetcher, HostResolver } from "./extraction/public-fetch";
 import { prepareImportRequest } from "./import-request";
 import { createExtractor, type RecipeExtractor } from "./providers";
 import { resolveRecipeServingCount } from "./serving-resolution";
+import { adaptRecipeUnitsForClient, reconcileSystemDependentUnits } from "./unit-resolution";
 
 type Variables = { requestID: string };
 type AppBindings = { Bindings: Env; Variables: Variables };
@@ -84,7 +85,10 @@ export function createApp(dependencies: AppDependencies = {}) {
       void work.finally(() => inFlightImports.delete(dedupeKey)).catch(() => undefined);
     }
     const result = await work;
-    return context.json({ requestID: context.get("requestID"), ...result }, 200);
+    // A retry can join work started by another request, so each response adapts its own copy.
+    const recipe = structuredClone(result.recipe) as Record<string, unknown>;
+    adaptRecipeUnitsForClient(recipe, prepared.metadata.supportedUnits);
+    return context.json({ requestID: context.get("requestID"), ...result, recipe }, 200);
   });
 
   app.notFound((context) => context.json({ error: { code: "not_found", message: "Route not found." }, requestID: context.get("requestID") }, 404));
@@ -105,6 +109,7 @@ async function performImport(
   }
   const recipe = structuredClone(result.recipe) as Record<string, unknown>;
   resolveRecipeServingCount(recipe, prepared.source);
+  reconcileSystemDependentUnits(recipe);
   recipe.provenance = prepared.provenance;
   validateCanonicalRecipe(recipe);
   return {

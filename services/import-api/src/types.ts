@@ -8,6 +8,8 @@ export interface ImportMetadata {
   locale: string;
   preferredUnitSystem: "source" | "metric" | "imperial";
   idempotencyKey: string;
+  /** RecipeV1 unit IDs the app can decode. Builds that predate the field omit it. */
+  supportedUnits?: string[];
 }
 
 export interface NormalizedRecipeSource {
@@ -23,6 +25,8 @@ export interface NormalizedRecipeSource {
   images: Array<{ mimeType: string; bytes: ArrayBuffer }>;
   locale: string;
   preferredUnitSystem: string;
+  /** The page's declared language, such as "en-GB", when a fetched page states one. */
+  sourceLanguage?: string;
 }
 
 export interface ExtractionResult {

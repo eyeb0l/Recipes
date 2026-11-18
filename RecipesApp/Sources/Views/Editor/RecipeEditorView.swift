@@ -349,12 +349,14 @@ private extension Binding where Value == String {
 }
 
 private extension UnitID {
-    /// A readable unit name for the editor's picker.
+    /// A readable unit name for the editor's picker. US and UK pints and fluid ounces are named
+    /// side by side so a recipe imported with the wrong one can be corrected.
     var editorName: String {
         switch self {
         case .none: "No unit"
         case .count: "Count"
-        case .fluidOunce: "fl oz"
+        case .fluidOunce: "US fl oz"
+        case .pint: "US pint"
         default: CulinaryUnits.symbol(for: self)
         }
     }

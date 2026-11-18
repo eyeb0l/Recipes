@@ -8,6 +8,8 @@ export interface ExtractedPageRecipe {
   structuredYield?: { servings: number; label: string | null };
   pageText?: string;
   method: "json-ld" | "microdata" | "cleaned-prose";
+  /** The language the page declares, such as "en-GB". A hint only: many sites keep their platform's default. */
+  language?: string;
 }
 
 interface MicrodataRecipeCandidate {
@@ -26,6 +28,32 @@ interface JSONLDRecipeCandidate {
 }
 
 export function extractRecipeFromHTML(html: string): ExtractedPageRecipe {
+  const extracted = extractPageRecipe(html);
+  const language = declaredPageLanguage(html);
+  return language ? { ...extracted, language } : extracted;
+}
+
+/** The first well-formed language tag from `<html lang>`, `og:locale`, or a `Content-Language` meta tag. */
+export function declaredPageLanguage(html: string): string | undefined {
+  const htmlAttributes = /<html\b([^>]*)>/iu.exec(html)?.[1] ?? "";
+  const metaValues = (key: string) => Array.from(html.matchAll(/<meta\b([^>]*)>/giu), (match) => match[1] ?? "")
+    .filter((attributes) => [attributeValue(attributes, "property"), attributeValue(attributes, "name"), attributeValue(attributes, "http-equiv")]
+      .some((value) => value?.toLowerCase() === key))
+    .map((attributes) => attributeValue(attributes, "content"));
+  const candidates = [
+    attributeValue(htmlAttributes, "lang"),
+    attributeValue(htmlAttributes, "xml:lang"),
+    ...metaValues("og:locale"),
+    ...metaValues("content-language")
+  ];
+  for (const candidate of candidates) {
+    const tag = candidate?.trim().replace(/_/gu, "-");
+    if (tag && tag.length <= 35 && /^[a-z]{2,3}(?:-[a-z0-9]{1,8})*$/iu.test(tag)) return tag;
+  }
+  return undefined;
+}
+
+function extractPageRecipe(html: string): ExtractedPageRecipe {
   const visibleHTML = withoutInactiveHTML(html);
   const pageText = cleanHTML(visibleHTML);
   const microdataRecipeCandidates = extractMicrodataRecipeCandidates(visibleHTML);

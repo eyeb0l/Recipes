@@ -217,6 +217,19 @@ final class RecipeTimelineTests: XCTestCase {
         XCTAssertEqual(ImportRecipeView.minimumPastedTextLength, 40)
     }
 
+    func testImportRequestsTellTheServiceThisBuildReadsUKPints() throws {
+        let metadata = RecipeImportMetadata(
+            sourceType: "text", url: nil, text: "1 pint milk", recognizedText: nil,
+            locale: "en_GB", preferredUnitSystem: "metric", idempotencyKey: "key"
+        )
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(metadata)) as? [String: Any])
+        let units = try XCTUnwrap(object["supportedUnits"] as? [String])
+        // Without these, services/import-api rewrites UK pints and fluid ounces as millilitres.
+        XCTAssertTrue(units.contains("imperialPint"))
+        XCTAssertTrue(units.contains("imperialFluidOunce"))
+        XCTAssertEqual(Set(units), Set(UnitID.allCases.map(\.rawValue)))
+    }
+
     @MainActor
     func testConcurrentTokenRefreshesShareOneRotatingRequest() async throws {
         StubSessionProtocol.reset(status: 200, body: try Self.tokenBody(access: "fresh-access", refresh: "fresh-refresh"), delay: 0.2)
