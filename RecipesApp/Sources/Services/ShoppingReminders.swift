@@ -52,7 +52,7 @@ protocol ShoppingReminderStore: AnyObject {
     func defaultListID() -> String?
     func incompleteReminders(inList listID: String) async throws -> [ExistingShoppingReminder]
     /// Applies a plan, or throws `listChanged` without changing anything if a reminder it updates has
-    /// since been edited, completed, moved or deleted.
+    /// since been edited, renamed, completed, moved or deleted.
     func apply(_ plan: ShoppingReminderPlan, toList listID: String) throws
 }
 
@@ -148,7 +148,8 @@ final class EventKitShoppingReminderStore: ShoppingReminderStore {
                       reminder.refresh(),
                       !reminder.isCompleted,
                       reminder.calendar?.calendarIdentifier == listID,
-                      reminder.notes == update.previousNotes
+                      reminder.notes == update.previousNotes,
+                      (reminder.title ?? "") == update.previousTitle
                 else { throw ShoppingReminderError.listChanged }
                 reminder.notes = update.notes
                 try store.save(reminder, commit: false)
@@ -213,7 +214,8 @@ final class InMemoryShoppingReminderStore: ShoppingReminderStore {
             guard let index = reminders.firstIndex(where: { $0.id == update.reminderID }),
                   !reminders[index].isCompleted,
                   reminders[index].listID == listID,
-                  reminders[index].notes == update.previousNotes
+                  reminders[index].notes == update.previousNotes,
+                  reminders[index].title == update.previousTitle
             else { throw ShoppingReminderError.listChanged }
             return index
         }

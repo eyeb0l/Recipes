@@ -148,7 +148,7 @@ final class ShoppingListTests: XCTestCase {
         let plan = ShoppingList.plan(adding: items, recipeTitle: "Brownies", to: existing)
 
         XCTAssertEqual(plan.newReminders, [.init(title: "Plain flour", notes: "80 g · Brownies")])
-        XCTAssertEqual(plan.notesUpdates, [.init(reminderID: "r1", notes: "6 · Pancakes\n2 · Brownies", previousNotes: "6 · Pancakes")])
+        XCTAssertEqual(plan.notesUpdates, [.init(reminderID: "r1", notes: "6 · Pancakes\n2 · Brownies", previousNotes: "6 · Pancakes", previousTitle: "large egg")])
         XCTAssertEqual(plan.alreadyListedCount, 1)
 
         let afterAdding = [
@@ -164,7 +164,7 @@ final class ShoppingListTests: XCTestCase {
         let replaced = ShoppingList.plan(adding: rescaled, recipeTitle: "Brownies", to: afterAdding)
         XCTAssertEqual(
             replaced.notesUpdates,
-            [.init(reminderID: "r1", notes: "6 · Pancakes\n4 · Brownies", previousNotes: "6 · Pancakes\n2 · Brownies")]
+            [.init(reminderID: "r1", notes: "6 · Pancakes\n4 · Brownies", previousNotes: "6 · Pancakes\n2 · Brownies", previousTitle: "large egg")]
         )
     }
 
@@ -261,6 +261,18 @@ final class ShoppingListTests: XCTestCase {
         XCTAssertEqual(plan("۱٬۲۰۰٫۴۲ cloves · Stew"), "2 cloves · Stew")
         // A placeholder isn't a number.
         XCTAssertEqual(plan("# cloves · Stew"), "# cloves · Stew\n2 cloves · Stew")
+        // Scaling, or switching unit system, can change the unit but not what it measures.
+        let flour = { (quantity: String, notes: String) in
+            ShoppingList.plan(
+                adding: [ShoppingListItem(id: "flour", ingredientIDs: ["flour"], name: "Flour", quantity: quantity)],
+                recipeTitle: "Stew",
+                to: [ExistingShoppingReminder(id: "r1", title: "flour", notes: notes)]
+            ).notesUpdates.first?.notes
+        }
+        XCTAssertEqual(flour("1.2 kg", "600 g · Stew"), "1.2 kg · Stew")
+        XCTAssertEqual(flour("1 lb", "600 g · Stew"), "1 lb · Stew")
+        XCTAssertEqual(flour("4 fl oz", "120 ml · Stew"), "4 fl oz · Stew")
+        XCTAssertEqual(flour("1.2 kg", "500 ml · Stew"), "500 ml · Stew\n1.2 kg · Stew", "Weight never replaces volume")
         // When it's unclear which line the app wrote, nothing is replaced.
         XCTAssertEqual(plan("1 clove · Stew\n3 cloves · Stew"), "1 clove · Stew\n3 cloves · Stew\n2 cloves · Stew")
     }

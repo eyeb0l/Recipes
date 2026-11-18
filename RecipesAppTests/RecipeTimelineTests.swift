@@ -401,8 +401,9 @@ final class RecipeTimelineTests: XCTestCase {
             to: try await store.incompleteReminders(inList: "groceries")
         )
 
-        // Edited in Reminders after the fetch, then completed, then deleted.
+        // Edited in Reminders after the fetch, renamed, completed, then deleted.
         for change in [
+            { (reminder: inout InMemoryShoppingReminderStore.Reminder) in reminder.title = "Milk" },
             { (reminder: inout InMemoryShoppingReminderStore.Reminder) in reminder.notes = "6 · Pancakes\nfree range" },
             { (reminder: inout InMemoryShoppingReminderStore.Reminder) in reminder.isCompleted = true }
         ] {

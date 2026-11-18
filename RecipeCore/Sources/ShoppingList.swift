@@ -42,6 +42,8 @@ public struct ShoppingReminderPlan: Equatable, Sendable {
         public var notes: String
         /// The notes this update was worked out from. A store applies it only if they're unchanged.
         public var previousNotes: String?
+        /// The reminder's title when the update was worked out. A store applies it only if it's unchanged.
+        public var previousTitle: String
     }
 
     public var newReminders: [NewReminder] = []
@@ -145,7 +147,12 @@ public enum ShoppingList {
             updatedNotes[reminder.id] = updated
         }
         plan.notesUpdates = updateOrder.map {
-            .init(reminderID: $0, notes: updatedNotes[$0] ?? "", previousNotes: remindersByID[$0]?.notes)
+            .init(
+                reminderID: $0,
+                notes: updatedNotes[$0] ?? "",
+                previousNotes: remindersByID[$0]?.notes,
+                previousTitle: remindersByID[$0]?.title ?? ""
+            )
         }
         return plan
     }
@@ -177,18 +184,20 @@ public enum ShoppingList {
         return !earlier.isEmpty && amountPattern(earlier) == amountPattern(amount)
     }
 
-    /// An amount with its numbers blanked out and plurals ignored, so "1 clove" and "2 cloves" match.
+    /// An amount with its numbers blanked out, plurals ignored and units reduced to what they measure, so
+    /// "1 clove" and "2 cloves" match, and so do "600 g", "1.2 kg" and "1 lb".
     static func amountPattern(_ amount: String) -> String {
         var pattern = ""
         var word = ""
         var inNumber = false
         func endWord() {
-            // Ignore plurals: "clove" and "cloves", "pinch" and "pinches".
-            var stem = word.lowercased()
-            if stem.hasSuffix("s") { stem.removeLast() }
-            if stem.hasSuffix("e") { stem.removeLast() }
-            pattern += stem
+            let stem = stem(word)
+            pattern += measureWords[stem] ?? stem
             word = ""
+        }
+        var amount = amount
+        for (symbol, joined) in multiWordSymbols {
+            amount = amount.replacingOccurrences(of: symbol, with: joined)
         }
         let characters = Array(amount)
         for (index, character) in characters.enumerated() {
@@ -214,6 +223,39 @@ public enum ShoppingList {
         endWord()
         return pattern
     }
+
+    /// A word lower-cased with plurals ignored: "clove" and "cloves", "pinch" and "pinches".
+    private static func stem(_ word: String) -> String {
+        var stem = word.lowercased()
+        if stem.hasSuffix("s") { stem.removeLast() }
+        if stem.hasSuffix("e") { stem.removeLast() }
+        return stem
+    }
+
+    /// Unit symbols written as more than one word, such as "fl oz", and the single word used in their place.
+    private static let multiWordSymbols: [(String, String)] = UnitID.allCases.flatMap { unit in
+        [false, true].map { CulinaryUnits.symbol(for: unit, plural: $0) }
+            .filter { $0.contains(" ") }
+            .map { ($0, $0.replacingOccurrences(of: " ", with: "")) }
+    }
+
+    /// Weight and volume unit symbols, keyed by stem, and a stand-in for what they measure. Scaling or
+    /// switching unit system can change "g" to "kg" or "oz", but never weight to volume.
+    private static let measureWords: [String: String] = {
+        var words: [String: String] = [:]
+        for unit in UnitID.allCases {
+            let measure: String
+            switch CulinaryUnits.dimension(of: unit) {
+            case .mass: measure = "\u{E001}"
+            case .volume: measure = "\u{E002}"
+            default: continue
+            }
+            for plural in [false, true] {
+                words[stem(CulinaryUnits.symbol(for: unit, plural: plural).replacingOccurrences(of: " ", with: ""))] = measure
+            }
+        }
+        return words
+    }()
 
     // MARK: Helpers
 

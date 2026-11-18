@@ -25,6 +25,7 @@ struct ShoppingListView: View {
     let request: ShoppingListRequest
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppPreferenceKey.shoppingReminderList) private var savedListID = ""
     @State private var store: (any ShoppingReminderStore)?
     @State private var selectedIDs: Set<String> = []
@@ -71,6 +72,11 @@ struct ShoppingListView: View {
             selectedIDs = Set(request.items.map(\.id)).subtracting(request.initiallyExcludedIDs)
             let store = ShoppingReminderStoreFactory.make()
             self.store = store
+            refreshLists(from: store)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Pick up access granted in Settings, or lists changed in Reminders, while the app was away.
+            guard phase == .active, !isAdding, let store else { return }
             refreshLists(from: store)
         }
     }
