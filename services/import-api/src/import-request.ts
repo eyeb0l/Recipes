@@ -74,7 +74,8 @@ export async function prepareImportRequest(
         pageText: extracted.method === "cleaned-prose" ? undefined : extracted.pageText,
         images: [],
         locale: metadata.locale,
-        preferredUnitSystem: metadata.preferredUnitSystem
+        preferredUnitSystem: metadata.preferredUnitSystem,
+        sourceLanguage: extracted.language
       },
       provenance: { sourceType: "url", url: page.finalURL, title: extracted.title ?? null, cleanedText: extracted.cleanedText, importedAt }
     };
@@ -121,6 +122,13 @@ function validateMetadata(value: ImportMetadata, imageCount: number): void {
     throw new APIError(400, "invalid_metadata", "Locale or unit preference is invalid.");
   }
   if (!value.idempotencyKey || value.idempotencyKey.length > 128) throw new APIError(400, "invalid_idempotency_key", "An idempotency key is required.");
+  if (value.supportedUnits !== undefined && (
+    !Array.isArray(value.supportedUnits)
+    || value.supportedUnits.length > 100
+    || value.supportedUnits.some((unit) => typeof unit !== "string" || unit.length === 0 || unit.length > 64)
+  )) {
+    throw new APIError(400, "invalid_metadata", "The supported units are invalid.");
+  }
   const hasURL = typeof value.url === "string" && value.url.length > 0;
   const hasText = typeof value.text === "string" && value.text.trim().length > 0;
   if (value.sourceType === "url" && (!hasURL || hasText || imageCount > 0)) throw new APIError(400, "invalid_source", "URL imports must contain only one URL.");

@@ -537,6 +537,106 @@ final class RecipeCoreTests: XCTestCase {
         XCTAssertNil(legacy.unitSystem)
         XCTAssertEqual(legacy.stages, session.stages)
     }
+
+    func testImperialPintsAndFluidOuncesUseUKSizes() throws {
+        XCTAssertEqual(try CulinaryUnits.converted(1, from: .imperialPint, to: .milliliter), Decimal(string: "568.26125")!)
+        XCTAssertEqual(try CulinaryUnits.converted(1, from: .imperialFluidOunce, to: .milliliter), Decimal(string: "28.4130625")!)
+        XCTAssertDecimalEqual(try CulinaryUnits.converted(20, from: .imperialFluidOunce, to: .imperialPint), 1, accuracy: Decimal(string: "0.000001")!)
+        // `pint` and `fluidOunce` keep meaning US measures, so recipes saved before the imperial units existed don't change.
+        XCTAssertEqual(try CulinaryUnits.converted(1, from: .pint, to: .milliliter), Decimal(string: "473.176473")!)
+        XCTAssertDecimalEqual(try CulinaryUnits.converted(1, from: .imperialPint, to: .pint), Decimal(string: "1.20095")!, accuracy: Decimal(string: "0.00001")!)
+        XCTAssertEqual(CulinaryUnits.dimension(of: .imperialPint), .volume)
+        XCTAssertEqual(CulinaryUnits.dimension(of: .imperialFluidOunce), .volume)
+        XCTAssertThrowsError(try CulinaryUnits.converted(1, from: .imperialPint, to: .gram))
+    }
+
+    func testImperialPintsDisplayInEachUnitSystem() {
+        let pint = CulinaryQuantity.exact(1, unit: .imperialPint)
+        XCTAssertEqual(pint.converted(for: .source).displayString(), "1 UK pint")
+        XCTAssertEqual(CulinaryQuantity.exact(2, unit: .imperialPint).displayString(), "2 UK pints")
+        XCTAssertEqual(CulinaryQuantity.exact(0.5, unit: .imperialPint).displayString(), "½ UK pint")
+        XCTAssertEqual(CulinaryQuantity.exact(10, unit: .imperialFluidOunce).displayString(), "10 UK fl oz")
+
+        // Metric and US amounts may be rounded for measuring, so allow 5%; a US pint would be 17% short.
+        let metric = pint.converted(for: .metric)
+        XCTAssertEqual(metric.unit, .milliliter)
+        XCTAssertDecimalEqual(metric.value!, Decimal(string: "568.26125")!, accuracy: Decimal(string: "28.4")!)
+        let halfPintMetric = CulinaryQuantity.exact(0.5, unit: .imperialPint).converted(for: .metric)
+        XCTAssertEqual(halfPintMetric.unit, .milliliter)
+        XCTAssertDecimalEqual(halfPintMetric.value!, Decimal(string: "284.130625")!, accuracy: Decimal(string: "14.2")!)
+        let twoPintsMetric = CulinaryQuantity.exact(2, unit: .imperialPint).converted(for: .metric)
+        XCTAssertEqual(twoPintsMetric.unit, .liter)
+        XCTAssertDecimalEqual(twoPintsMetric.value!, Decimal(string: "1.1365225")!, accuracy: Decimal(string: "0.057")!)
+
+        // The `imperial` preference means US customary units, so a UK pint becomes about 1.2 US pints.
+        let us = pint.converted(for: .imperial)
+        XCTAssertEqual(us.unit, .pint)
+        XCTAssertDecimalEqual(us.value!, Decimal(string: "1.20095")!, accuracy: Decimal(string: "0.06")!)
+        let fluidOunces = CulinaryQuantity.exact(5, unit: .imperialFluidOunce).converted(for: .imperial)
+        XCTAssertEqual(fluidOunces.unit, .cup)
+        XCTAssertDecimalEqual(fluidOunces.value!, Decimal(string: "0.6")!, accuracy: Decimal(string: "0.03")!)
+    }
+
+    func testImperialUnitsScaleAndRoundTripWithoutASchemaChange() throws {
+        var recipe = SampleRecipe.espressoBrownies
+        let butter = try XCTUnwrap(recipe.ingredients.firstIndex { $0.id == "butter" })
+        recipe.ingredients[butter].name = "milk"
+        recipe.ingredients[butter].quantity = .exact(1, unit: .imperialPint, originalText: "1 pint")
+        let melt = try XCTUnwrap(recipe.stages.firstIndex { $0.id == "melt" })
+        let use = try XCTUnwrap(recipe.stages[melt].ingredientUses.firstIndex { $0.ingredientID == "butter" })
+        recipe.stages[melt].ingredientUses[use].quantity = .exact(20, unit: .imperialFluidOunce)
+
+        let data = try RecipeCoding.encoder.encode(recipe)
+        let json = try XCTUnwrap(String(data: data, encoding: .utf8))
+        XCTAssertTrue(json.contains(#""unit":"imperialPint""#))
+        XCTAssertTrue(json.contains(#""unit":"imperialFluidOunce""#))
+        let decoded = try RecipeSchemaMigrator.decodeAndMigrate(data)
+        XCTAssertEqual(decoded.schemaVersion, 1)
+        XCTAssertEqual(decoded, recipe)
+
+        // 20 UK fl oz is the whole UK pint, so the allocation is complete; a US pint would fall short.
+        XCTAssertTrue(RecipeValidator.validate(decoded).issues.isEmpty, RecipeValidator.validate(decoded).issues.map(\.message).joined(separator: "\n"))
+        recipe.stages[melt].ingredientUses[use].quantity = .exact(1, unit: .pint)
+        XCTAssertTrue(RecipeValidator.validate(recipe).issues.contains { $0.code == "ingredient.underAllocated" })
+
+        let scaled = try XCTUnwrap(decoded.ingredients[butter].displayQuantity(
+            servings: decoded.recipeYield.servings * 2,
+            originalServings: decoded.recipeYield.servings,
+            units: .source
+        ))
+        XCTAssertEqual(scaled, "2 UK pints")
+    }
+
+    func testStoredRecipesWithUSPintsStillDecodeAsUSPints() throws {
+        var recipe = SampleRecipe.espressoBrownies
+        let butter = try XCTUnwrap(recipe.ingredients.firstIndex { $0.id == "butter" })
+        recipe.ingredients[butter].quantity = .exact(1, unit: .pint)
+        let stored = try XCTUnwrap(String(data: RecipeCoding.encoder.encode(recipe), encoding: .utf8))
+        XCTAssertTrue(stored.contains(#""schemaVersion":1"#))
+        XCTAssertTrue(stored.contains(#""unit":"pint""#))
+        let decoded = try RecipeSchemaMigrator.decodeAndMigrate(Data(stored.utf8))
+        XCTAssertEqual(decoded.ingredients[butter].quantity?.unit, .pint)
+        XCTAssertEqual(decoded.ingredients[butter].quantity?.displayString(), "1 pint")
+    }
+
+    func testCookSessionKeepsImperialPintsAcrossRelaunch() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("CookSession-\(UUID().uuidString).json")
+        var recipe = SampleRecipe.espressoBrownies
+        let butter = try XCTUnwrap(recipe.ingredients.firstIndex { $0.id == "butter" })
+        recipe.ingredients[butter].name = "milk"
+        recipe.ingredients[butter].quantity = .exact(1, unit: .imperialPint)
+        let melt = try XCTUnwrap(recipe.stages.firstIndex { $0.id == "melt" })
+        for index in recipe.stages[melt].ingredientUses.indices where recipe.stages[melt].ingredientUses[index].ingredientID == "butter" {
+            recipe.stages[melt].ingredientUses[index].quantity = nil
+        }
+        let created = try await CookSessionStore(fileURL: url).createSession(for: recipe, unitSystem: .source)
+
+        let relaunched = try await CookSessionStore(fileURL: url).session(id: created.id)
+        let session = try XCTUnwrap(relaunched)
+        let stage = try XCTUnwrap(session.stages.first { $0.id == "melt" })
+        XCTAssertEqual(stage.ingredients?.first { $0.name == "milk" }?.quantity?.unit, .imperialPint)
+        XCTAssertTrue(session.ingredientLines(for: stage).contains("1 UK pint milk"))
+    }
 }
 
 private extension XCTestCase {

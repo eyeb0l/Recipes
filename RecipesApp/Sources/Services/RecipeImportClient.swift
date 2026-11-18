@@ -16,6 +16,9 @@ struct RecipeImportMetadata: Encodable {
     let locale: String
     let preferredUnitSystem: String
     let idempotencyKey: String
+    /// Every unit this build can decode. The service rewrites newer units, such as UK pints, into ones that
+    /// builds without them understand, so it needs to know which build is asking.
+    let supportedUnits = UnitID.allCases.map(\.rawValue)
 }
 
 struct RecipeImportResponse: Decodable {

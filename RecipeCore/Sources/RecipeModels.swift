@@ -107,8 +107,14 @@ public enum UnitID: String, Codable, CaseIterable, Sendable {
     case teaspoon
     case tablespoon
     case cup
+    /// A US fluid ounce.
     case fluidOunce
+    /// A US pint.
     case pint
+    /// A UK imperial fluid ounce, 28.4130625 ml.
+    case imperialFluidOunce
+    /// A UK imperial pint of 20 imperial fluid ounces, 568.26125 ml.
+    case imperialPint
     case celsius
     case fahrenheit
     case count

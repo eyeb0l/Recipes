@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createApp } from "../src/index";
 import type { RecipeExtractor } from "../src/providers";
 import { missingServingCountMessage, missingServingCountUncertaintyID } from "../src/serving-resolution";
+import { legacyUnitIDs } from "../src/unit-resolution";
 import type { NormalizedRecipeSource } from "../src/types";
 import { MemoryKV, testEnv, validRecipe } from "./fixtures";
 
@@ -365,5 +366,100 @@ describe("import API", () => {
     expect(response.status).toBe(200);
     expect(consoleSpy).not.toHaveBeenCalled();
     consoleSpy.mockRestore();
+  });
+
+  describe("UK pints", () => {
+    const allUnits = [...legacyUnitIDs, "imperialFluidOunce", "imperialPint"];
+
+    function pintRecipe(): any {
+      const recipe = validRecipe();
+      recipe.ingredients.push({
+        id: "milk", name: "milk", scalable: true, notes: null, sortIndex: 1,
+        quantity: { kind: "exact", value: 1, lower: null, upper: null, text: null, unit: "pint", originalText: "1 pint (570ml) milk" }
+      });
+      recipe.stages[0].ingredientUses.push({
+        ingredientID: "milk", stateChange: null,
+        quantity: { kind: "exact", value: 10, lower: null, upper: null, text: null, unit: "fluidOunce", originalText: null }
+      });
+      return recipe;
+    }
+
+    function pintImportRequest(token: string, idempotencyKey: string, supportedUnits?: unknown): RequestInit {
+      const init = importRequest(token, idempotencyKey);
+      return { ...init, body: JSON.stringify({ ...JSON.parse(init.body as string), supportedUnits }) };
+    }
+
+    it("returns UK units to builds that read them, and millilitres to builds that don't", async () => {
+      const env = testEnv();
+      const extract = vi.fn(async () => ({ recipe: pintRecipe(), provider: "openai" as const, model: "gpt-6.1-terra" }));
+      const app = createApp({ verifyApple: async () => "opaque-apple-subject", extractorFactory: () => ({ provider: "openai", model: "gpt-6.1-terra", extract }) });
+      const token = await accessToken(app, env);
+
+      const current = await app.request("/v1/recipe-imports", pintImportRequest(token, "pints-current", allUnits), env);
+      expect(current.status).toBe(200);
+      const currentRecipe = (await current.json() as any).recipe;
+      // "(570ml)" settles that the model's US pint was a UK one, and the stage's fluid ounces follow it.
+      expect(currentRecipe.ingredients[1].quantity).toMatchObject({ value: 1, unit: "imperialPint", originalText: "1 pint (570ml) milk" });
+      expect(currentRecipe.stages[0].ingredientUses[1].quantity).toMatchObject({ value: 10, unit: "imperialFluidOunce" });
+
+      const legacy = await app.request("/v1/recipe-imports", pintImportRequest(token, "pints-legacy"), env);
+      expect(legacy.status).toBe(200);
+      const legacyBody = await legacy.json() as any;
+      expect(legacyBody.extraction.schemaVersion).toBe(1);
+      expect(legacyBody.recipe.ingredients[1].quantity).toMatchObject({ value: 568, unit: "milliliter", originalText: "1 pint (570ml) milk" });
+      expect(legacyBody.recipe.stages[0].ingredientUses[1].quantity).toMatchObject({ value: 284, unit: "milliliter" });
+    });
+
+    it("adapts each joined request's own copy of shared work", async () => {
+      const limit = vi.fn(async () => ({ success: true }));
+      const env = testEnv({ IMPORT_RATE_LIMITER: { limit } });
+      let release: () => void = () => undefined;
+      const pending = new Promise<void>((resolve) => { release = resolve; });
+      const extract = vi.fn(async () => {
+        await pending;
+        return { recipe: pintRecipe(), provider: "openai" as const, model: "gpt-6.1-terra" };
+      });
+      const app = createApp({ verifyApple: async () => "opaque-apple-subject", extractorFactory: () => ({ provider: "openai", model: "gpt-6.1-terra", extract }) });
+      const token = await accessToken(app, env);
+      const legacy = app.request("/v1/recipe-imports", pintImportRequest(token, "pints-joined"), env);
+      await vi.waitFor(() => expect(extract).toHaveBeenCalledTimes(1));
+      const current = app.request("/v1/recipe-imports", pintImportRequest(token, "pints-joined", allUnits), env);
+      await vi.waitFor(() => expect(limit).toHaveBeenCalledTimes(2));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      release();
+      const [legacyResponse, currentResponse] = await Promise.all([legacy, current]);
+      expect(extract).toHaveBeenCalledTimes(1);
+      expect((await legacyResponse.json() as any).recipe.ingredients[1].quantity.unit).toBe("milliliter");
+      expect((await currentResponse.json() as any).recipe.ingredients[1].quantity.unit).toBe("imperialPint");
+    });
+
+    it.each([["imperialPint"], [[1]], [[""]], [Array.from({ length: 101 }, () => "pint")]])("rejects supportedUnits of %j", async (supportedUnits) => {
+      const env = testEnv();
+      const extract = vi.fn();
+      const app = createApp({ verifyApple: async () => "opaque-apple-subject", extractorFactory: () => ({ provider: "openai", model: "gpt-6.1-terra", extract }) });
+      const response = await app.request("/v1/recipe-imports", pintImportRequest(await accessToken(app, env), "bad-units", supportedUnits), env);
+      expect(response.status).toBe(400);
+      expect((await response.json() as any).error.code).toBe("invalid_metadata");
+      expect(extract).not.toHaveBeenCalled();
+    });
+
+    it("tells the model the language a recipe page declares", async () => {
+      const html = `<!doctype html><html lang="en-GB"><head><meta property="og:locale" content="en_US"></head><body>
+        <script type="application/ld+json">${JSON.stringify({
+          "@type": "Recipe", name: "Rice pudding", recipeYield: "4",
+          recipeIngredient: ["1 pint milk"], recipeInstructions: ["Bake slowly."]
+        })}</script></body></html>`;
+      const extract = vi.fn(async (_source: NormalizedRecipeSource, _requestID: string) => ({ recipe: validRecipe(), provider: "openai" as const, model: "gpt-6.1-terra" }));
+      const env = testEnv();
+      const app = createApp({
+        verifyApple: async () => "opaque-apple-subject",
+        resolver: publicResolver,
+        fetcher: async () => new Response(html, { headers: { "Content-Type": "text/html" } }),
+        extractorFactory: () => ({ provider: "openai", model: "gpt-6.1-terra", extract })
+      });
+      const response = await app.request("/v1/recipe-imports", urlImportRequest(await accessToken(app, env), "page-language"), env);
+      expect(response.status).toBe(200);
+      expect(extract.mock.calls[0]?.[0].sourceLanguage).toBe("en-GB");
+    });
   });
 });

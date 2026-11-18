@@ -12,6 +12,12 @@ Each `RecipeRecord` stores versioned canonical JSON plus searchable metadata and
 
 `CookSessionStore` is a separate actor-backed JSON store in the App Group. This prevents timer ticks, stage completion, and Live Activity intent actions from becoming CloudKit merge conflicts.
 
+## Units
+
+`RecipeV1` unit IDs name one measure each, so they can be converted exactly. `cup`, `fluidOunce` and `pint` are US measures; `imperialFluidOunce` and `imperialPint` are UK ones, shown as "UK fl oz" and "UK pint". New unit IDs are added within schema version 1 because the document's shape doesn't change, and recipes saved with `pint` keep meaning US pints. Bumping the version would make every recipe unreadable to older builds, not just the ones that use a new unit.
+
+A build that predates a unit can't decode a recipe that uses it. The import service rewrites such units for those builds (see the [import service README](../services/import-api/README.md)), but a recipe saved by a newer build and synced through iCloud won't open on a device still running an older build until that device updates.
+
 ## Cook state
 
 A stage is ready when it is incomplete and all dependency IDs are complete. Multiple ready stages can run in parallel; one is focused. Timers are independent persisted records with absolute end dates, so reconciliation after termination is deterministic. One Live Activity summarizes the whole session and points back through `recipetimeline://cook?session=…`.

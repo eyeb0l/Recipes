@@ -72,9 +72,10 @@
     },
     "unitID": {
       "type": "string",
+      "description": "cup, fluidOunce and pint are US customary measures (fluidOunce 29.5735295625 ml, pint 473.176473 ml). imperialFluidOunce (28.4130625 ml) and imperialPint (568.26125 ml) are the UK imperial measures.",
       "enum": [
         "none", "gram", "kilogram", "ounce", "pound",
-        "milliliter", "liter", "teaspoon", "tablespoon", "cup", "fluidOunce", "pint",
+        "milliliter", "liter", "teaspoon", "tablespoon", "cup", "fluidOunce", "pint", "imperialFluidOunce", "imperialPint",
         "celsius", "fahrenheit",
         "count", "pinch", "clove", "slice", "can", "package", "bunch", "sprig", "shot"
       ]
