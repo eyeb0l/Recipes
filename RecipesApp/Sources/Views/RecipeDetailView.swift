@@ -12,12 +12,16 @@ struct RecipeDetailView: View {
         case editor
         case source
         case export(RecipeExportRequest)
+        case shoppingList(ShoppingListRequest)
+        case substitutes(IngredientSubstitutesRequest)
 
         var id: String {
             switch self {
             case .editor: "editor"
             case .source: "source"
             case .export: "export"
+            case .shoppingList: "shopping-list"
+            case let .substitutes(request): "substitutes-\(request.id)"
             }
         }
     }
@@ -83,6 +87,16 @@ struct RecipeDetailView: View {
                 .disabled(recipe == nil)
                 .accessibilityIdentifier("export-recipe")
             }
+            ToolbarItem(placement: .primaryAction) {
+                Button("Shopping list", systemImage: "checklist") {
+                    guard let recipe else { return }
+                    presentedSheet = .shoppingList(
+                        .init(recipe: recipe, servings: selectedServings, units: units, gatheredIngredientIDs: gatheredIngredientIDs)
+                    )
+                }
+                .disabled(recipe == nil)
+                .accessibilityIdentifier("shopping-list")
+            }
             ToolbarOverflowMenu {
                 Button("View source", systemImage: "doc.text.magnifyingglass") { presentedSheet = .source }
             }
@@ -100,6 +114,10 @@ struct RecipeDetailView: View {
                 RecipeSourceView(record: record)
             case let .export(request):
                 RecipeExportView(request: request)
+            case let .shoppingList(request):
+                ShoppingListView(request: request)
+            case let .substitutes(request):
+                IngredientSubstitutesView(request: request)
             }
         }
         .task(id: LoadIdentity(recordID: record.id, updatedAt: record.updatedAt)) {
@@ -232,37 +250,54 @@ struct RecipeDetailView: View {
             VStack(spacing: 0) {
                 ForEach(Array(recipe.sortedIngredients.enumerated()), id: \.element.id) { index, ingredient in
                     let gathered = gatheredIngredientIDs.contains(ingredient.id)
-                    Button {
-                        withAnimation(.snappy) {
-                            if gathered { gatheredIngredientIDs.remove(ingredient.id) } else { gatheredIngredientIDs.insert(ingredient.id) }
-                        }
-                    } label: {
-                        HStack(alignment: .firstTextBaseline, spacing: 12) {
-                            Image(systemName: gathered ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(gathered ? RecipeTheme.success : RecipeTheme.grid)
-                                .font(.body)
-                                .accessibilityHidden(true)
-                            Text(ingredient.name)
-                                .strikethrough(gathered, color: RecipeTheme.secondaryInk)
-                                .foregroundStyle(gathered ? RecipeTheme.secondaryInk : RecipeTheme.ink)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            if let quantity = ingredient.displayQuantity(
-                                servings: selectedServings,
-                                originalServings: recipe.recipeYield.servings,
-                                units: units
-                            ) {
-                                Text(quantity)
-                                    .font(.body.weight(.semibold).monospacedDigit())
-                                    .foregroundStyle(gathered ? RecipeTheme.secondaryInk : RecipeTheme.ink)
-                                    .multilineTextAlignment(.trailing)
+                    let hasSubstitutes = IngredientSubstitutions.hasSubstitutes(for: ingredient.name)
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Button {
+                            withAnimation(.snappy) {
+                                if gathered { gatheredIngredientIDs.remove(ingredient.id) } else { gatheredIngredientIDs.insert(ingredient.id) }
                             }
+                        } label: {
+                            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                                Image(systemName: gathered ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(gathered ? RecipeTheme.success : RecipeTheme.grid)
+                                    .font(.body)
+                                    .accessibilityHidden(true)
+                                Text(ingredient.name)
+                                    .strikethrough(gathered, color: RecipeTheme.secondaryInk)
+                                    .foregroundStyle(gathered ? RecipeTheme.secondaryInk : RecipeTheme.ink)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                if let quantity = ingredient.displayQuantity(
+                                    servings: selectedServings,
+                                    originalServings: recipe.recipeYield.servings,
+                                    units: units
+                                ) {
+                                    Text(quantity)
+                                        .font(.body.weight(.semibold).monospacedDigit())
+                                        .foregroundStyle(gathered ? RecipeTheme.secondaryInk : RecipeTheme.ink)
+                                        .multilineTextAlignment(.trailing)
+                                }
+                            }
+                            .padding(.vertical, 11)
+                            .contentShape(Rectangle())
                         }
-                        .padding(.vertical, 11)
-                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
+                        .accessibilityValue(gathered ? "Gathered" : "")
+                        .accessibilityHint("Marks this ingredient as gathered")
+                        if hasSubstitutes {
+                            Button {
+                                showSubstitutes(for: ingredient, in: recipe)
+                            } label: {
+                                Image(systemName: "arrow.left.arrow.right")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(RecipeTheme.focus)
+                                    .frame(minWidth: 36, minHeight: 36)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Substitutes for \(ingredient.name)")
+                            .accessibilityIdentifier("substitutes-\(ingredient.id)")
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityValue(gathered ? "Gathered" : "")
-                    .accessibilityHint("Marks this ingredient as gathered")
                     if index < recipe.ingredients.count - 1 {
                         Divider().overlay(RecipeTheme.gridSubtle)
                     }
@@ -272,6 +307,8 @@ struct RecipeDetailView: View {
             .paperCard(cornerRadius: 20)
         }
         .padding(.horizontal)
+        // A containing element takes the identifier, so the rows keep their own.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ingredient-list")
     }
 
@@ -340,11 +377,20 @@ struct RecipeDetailView: View {
                 FocusedStepList(recipe: recipe, servings: selectedServings, units: units)
                     .padding(.horizontal)
             } else {
-                TimelineGridView(recipe: recipe, servings: selectedServings, units: units)
+                TimelineGridView(
+                    recipe: recipe,
+                    servings: selectedServings,
+                    units: units,
+                    onShowSubstitutes: { showSubstitutes(for: $0, in: recipe) }
+                )
                     .frame(minHeight: 520)
                     .padding(.horizontal)
             }
         }
+    }
+
+    private func showSubstitutes(for ingredient: Ingredient, in recipe: RecipeV1) {
+        presentedSheet = .substitutes(.init(ingredient: ingredient, recipe: recipe, servings: selectedServings, units: units))
     }
 
     // MARK: Cooking

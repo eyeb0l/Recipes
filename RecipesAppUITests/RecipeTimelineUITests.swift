@@ -131,6 +131,47 @@ final class RecipeTimelineUITests: XCTestCase {
         XCTAssertTrue(app.buttons["export-png"].exists)
     }
 
+    func testIngredientSubstitutesShowScaledAmounts() {
+        let app = launchSampleApp()
+        openSampleRecipe(in: app)
+
+        let increment = app.buttons["servings-control-Increment"]
+        XCTAssertTrue(increment.waitForExistence(timeout: 3))
+        for _ in 0..<9 { increment.tap() }
+        XCTAssertEqual(increment.value as? String, "18")
+
+        let substitutes = app.buttons["substitutes-butter"]
+        XCTAssertTrue(substitutes.waitForExistence(timeout: 3))
+        substitutes.tap()
+
+        XCTAssertTrue(app.navigationBars["Substitutes"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Neutral oil"].exists)
+        // 230 g of butter for 18 servings becomes four-fifths as much oil.
+        XCTAssertTrue(app.staticTexts["184 g"].exists)
+        attachScreenshot(named: "ingredient-substitutes")
+        XCTAssertFalse(app.buttons["substitutes-cocoa"].exists, "Cocoa has no substitutes, so offers none")
+    }
+
+    func testShoppingListAddsSelectedIngredientsToReminders() {
+        let app = launchSampleApp()
+        openSampleRecipe(in: app)
+
+        tapToolbarButton("shopping-list", label: "Shopping list", in: app)
+        XCTAssertTrue(app.navigationBars["Shopping list"].waitForExistence(timeout: 5))
+        let butter = app.buttons["shopping-item-butter"]
+        XCTAssertTrue(butter.waitForExistence(timeout: 3))
+        butter.tap()
+
+        let add = app.buttons["shopping-list-add"]
+        XCTAssertTrue(add.waitForExistence(timeout: 3))
+        XCTAssertEqual(add.label, "Add 8 items to Reminders")
+        attachScreenshot(named: "shopping-list")
+        add.tap()
+
+        XCTAssertTrue(app.staticTexts["Added to Groceries"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["8 new items."].exists)
+    }
+
     func testChoosePhotosOpensPhotoPickerInsteadOfDocumentScanner() {
         let app = launchSampleApp()
 
@@ -257,6 +298,21 @@ final class RecipeTimelineUITests: XCTestCase {
         app.launchArguments = ["--ui-testing"]
         app.launch()
         return app
+    }
+
+    /// Taps a toolbar button, looking in the overflow menu when the toolbar has no room for it.
+    private func tapToolbarButton(_ identifier: String, label: String, in app: XCUIApplication) {
+        let button = app.buttons[identifier]
+        if button.waitForExistence(timeout: 3), button.isHittable {
+            button.tap()
+            return
+        }
+        let more = app.navigationBars.buttons["More"]
+        XCTAssertTrue(more.waitForExistence(timeout: 3))
+        more.tap()
+        let menuItem = app.buttons[label]
+        XCTAssertTrue(menuItem.waitForExistence(timeout: 3))
+        menuItem.tap()
     }
 
     private func useLandscapeOrientation() {
