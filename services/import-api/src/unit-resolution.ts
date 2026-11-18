@@ -91,7 +91,10 @@ function metricEquivalentSystem(quantity: JSONObject, text: string): MeasureSyst
   if (quantity.kind !== "exact" || typeof quantity.value !== "number" || quantity.value <= 0) return undefined;
   const amounts = Array.from(text.matchAll(metricAmount));
   if (amounts.length !== 1) return undefined;
-  const [, number, unit] = amounts[0]!;
+  const amount = amounts[0]!;
+  const [, number, unit] = amount;
+  // The end of a range, as in "500–568 ml", isn't a single equivalent.
+  if (/(?:[-\u2013\u2014]|\bto)\s*$/iu.test(text.slice(0, amount.index))) return undefined;
   const lowerUnit = unit!.toLowerCase();
   const scale = lowerUnit.startsWith("m") ? 1 : lowerUnit.startsWith("c") ? 10 : 1_000;
   const perPint = parseDecimal(number!) * scale / quantity.value;
@@ -139,25 +142,23 @@ const fallbacks: Record<string, { unit: string; factor: number }> = {
   imperialFluidOunce: { unit: "milliliter", factor: millilitersPerUnit.imperialFluidOunce }
 };
 
-function roundedMilliliters(value: number): number {
-  // Whole millilitres are finer than a measuring jug reads; keep a decimal for very small amounts.
-  return value >= 10 ? Math.round(value) : Math.round(value * 10) / 10;
-}
-
 /**
  * Rewrites quantities in units the requesting build can't decode into millilitres, so a build
  * released before UK pints were added still gets the right amount rather than a decoding failure.
  * `originalText` keeps the source wording, such as "1 pint".
+ *
+ * Amounts aren't rounded: the app checks that stage allocations add up to no more than their
+ * ingredient, and rounding each one separately could break that. The app rounds for display.
  */
 export function adaptRecipeUnitsForClient(recipe: JSONObject, supportedUnits: readonly string[] | undefined): void {
   const supported = new Set(supportedUnits ?? legacyUnitIDs);
   for (const { quantity } of quantities(recipe)) {
     if (typeof quantity.unit !== "string" || supported.has(quantity.unit)) continue;
     const fallback = fallbacks[quantity.unit];
-    if (!fallback || !supported.has(fallback.unit)) continue;
+    if (!fallback) continue;
     for (const key of ["value", "lower", "upper"] as const) {
       const amount = quantity[key];
-      if (typeof amount === "number") quantity[key] = roundedMilliliters(amount * fallback.factor);
+      if (typeof amount === "number") quantity[key] = amount * fallback.factor;
     }
     quantity.unit = fallback.unit;
   }

@@ -62,6 +62,9 @@ describe("US and UK pints and fluid ounces", () => {
     ["1 pint (about 520 ml) milk", "pint"],
     ["1 pint (568 ml) or 500 ml milk", "pint"],
     ["1 UK pint (1.2 US pints) milk", "pint"],
+    ["1 pint (500–568 ml) milk", "pint"],
+    ["1 pint (500-568 ml) milk", "imperialPint"],
+    ["1 pint (470 to 568 ml) milk", "pint"],
     ["10 fl oz (300 ml) milk", "fluidOunce"],
     ["10 fl oz (300 ml) milk", "imperialFluidOunce"]
   ])("keeps the model's choice when %j doesn't settle it", (originalText, modelUnit) => {
@@ -108,7 +111,7 @@ describe("US and UK pints and fluid ounces", () => {
 });
 
 describe("units for app builds without UK pints", () => {
-  it("rewrites UK units as millilitres for builds that don't list their units", () => {
+  it("rewrites UK units as exact millilitres for builds that don't list their units", () => {
     const recipe = recipeWithMilk(quantity(1, "imperialPint", "1 pint"), quantity(0.25, "imperialFluidOunce", "1/4 fl oz"));
     recipe.ingredients.push({
       id: "stock", name: "stock",
@@ -119,13 +122,36 @@ describe("units for app builds without UK pints", () => {
     reconcileSystemDependentUnits(recipe);
     adaptRecipeUnitsForClient(recipe, undefined);
 
-    expect(recipe.ingredients[1].quantity).toEqual(quantity(568, "milliliter", "1 pint"));
-    expect(recipe.stages[0].ingredientUses[1].quantity).toEqual(quantity(7.1, "milliliter", "1/4 fl oz"));
-    expect(recipe.ingredients[2].quantity).toMatchObject({ kind: "range", lower: 568, upper: 1137, unit: "milliliter", originalText: "1-2 pints" });
+    expect(recipe.ingredients[1].quantity).toEqual(quantity(568.26125, "milliliter", "1 pint"));
+    expect(recipe.stages[0].ingredientUses[1].quantity).toMatchObject({ unit: "milliliter", originalText: "1/4 fl oz" });
+    expect(recipe.stages[0].ingredientUses[1].quantity.value).toBeCloseTo(7.103265625, 9);
+    expect(recipe.ingredients[2].quantity).toMatchObject({ kind: "range", lower: 568.26125, upper: 1136.5225, unit: "milliliter", originalText: "1-2 pints" });
     expect(recipe.ingredients[0].quantity.unit).toBe("gram");
     expect(() => validateCanonicalRecipe(recipe)).not.toThrow();
     const units = JSON.stringify(recipe).match(/"unit":"[^"]+"/gu)!.map((match) => match.slice(8, -1));
     expect(units.every((unit) => legacyUnitIDs.includes(unit))).toBe(true);
+  });
+
+  it("keeps stage allocations within their ingredient, which the app rejects otherwise", () => {
+    // Rounded separately, 3 UK fl oz became 85 ml but each 1.5 UK fl oz became 43 ml, 86 ml in all.
+    const recipe = recipeWithMilk(quantity(3, "imperialFluidOunce", "3 fl oz"), quantity(1.5, "imperialFluidOunce", null));
+    recipe.stages.push({ ...structuredClone(recipe.stages[0]), id: "finish", dependencies: ["mix"], sortIndex: 1, ingredientUses: [{ ingredientID: "milk", quantity: quantity(1.5, "imperialFluidOunce", null), stateChange: null }] });
+    adaptRecipeUnitsForClient(recipe, undefined);
+    const total = recipe.ingredients[1].quantity.value;
+    const allocated = recipe.stages.flatMap((stage: any) => stage.ingredientUses).filter((use: any) => use.ingredientID === "milk")
+      .reduce((sum: number, use: any) => sum + use.quantity.value, 0);
+    expect(total).toBeCloseTo(85.2391875, 9);
+    // RecipeValidator rejects allocations above the ingredient by more than 0.1%.
+    expect(allocated).toBeLessThanOrEqual(total * 1.001);
+    expect(allocated).toBeGreaterThanOrEqual(total * 0.999);
+  });
+
+  it("rewrites UK units missing from a list the app sends, even an empty one", () => {
+    for (const supported of [[], ["gram"]]) {
+      const recipe = recipeWithMilk(quantity(1, "imperialPint", "1 pint"));
+      adaptRecipeUnitsForClient(recipe, supported);
+      expect(recipe.ingredients[1].quantity).toEqual(quantity(568.26125, "milliliter", "1 pint"));
+    }
   });
 
   it("keeps UK units for builds that list them, and US units for every build", () => {

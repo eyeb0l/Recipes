@@ -406,8 +406,9 @@ describe("import API", () => {
       expect(legacy.status).toBe(200);
       const legacyBody = await legacy.json() as any;
       expect(legacyBody.extraction.schemaVersion).toBe(1);
-      expect(legacyBody.recipe.ingredients[1].quantity).toMatchObject({ value: 568, unit: "milliliter", originalText: "1 pint (570ml) milk" });
-      expect(legacyBody.recipe.stages[0].ingredientUses[1].quantity).toMatchObject({ value: 284, unit: "milliliter" });
+      expect(legacyBody.recipe.ingredients[1].quantity).toMatchObject({ value: 568.26125, unit: "milliliter", originalText: "1 pint (570ml) milk" });
+      expect(legacyBody.recipe.stages[0].ingredientUses[1].quantity).toMatchObject({ unit: "milliliter" });
+      expect(legacyBody.recipe.stages[0].ingredientUses[1].quantity.value).toBeCloseTo(284.130625, 9);
     });
 
     it("adapts each joined request's own copy of shared work", async () => {
