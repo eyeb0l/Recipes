@@ -170,7 +170,9 @@ final class RecipeCoreTests: XCTestCase {
         let quantity = CulinaryQuantity.exact(500, unit: .gram)
         let scaled = quantity.scaled(by: 2).converted(for: .imperial)
         XCTAssertEqual(scaled.unit, .pound)
-        XCTAssertDecimalEqual(try CulinaryUnits.converted(scaled.value!, from: .pound, to: .gram), 1_000, accuracy: Decimal(string: "0.001")!)
+        XCTAssertEqual(scaled.value, Decimal(string: "2.25"))
+        let pounds = try CulinaryUnits.converted(1_000, from: .gram, to: .pound)
+        XCTAssertDecimalEqual(try CulinaryUnits.converted(pounds, from: .pound, to: .gram), 1_000, accuracy: Decimal(string: "0.001")!)
 
         let qualitative = CulinaryQuantity.qualitative("to taste")
         XCTAssertEqual(qualitative.scaled(by: 8).displayString(), "to taste")
@@ -178,6 +180,103 @@ final class RecipeCoreTests: XCTestCase {
         XCTAssertEqual(CulinaryQuantity.range(0.25, 0.5, unit: .cup).displayString(), "¼–½ cup")
         XCTAssertThrowsError(try CulinaryUnits.converted(100, from: .gram, to: .cup))
         XCTAssertEqual(CookingTemperature(value: 180, unit: .celsius).converted(for: .imperial).value, 356)
+    }
+
+    func testMetricKeepsSpoonMeasuresAndConvertsCupsToMillilitres() {
+        func metric(_ value: Decimal, _ unit: UnitID) -> String {
+            CulinaryQuantity.exact(value, unit: unit).converted(for: .metric).displayString()
+        }
+
+        // Metric recipes use the same spoons: 1 tsp = 5 ml and 1 tbsp = 15 ml.
+        XCTAssertEqual(metric(2, .teaspoon), "2 tsp")
+        XCTAssertEqual(metric(0.5, .teaspoon), "½ tsp")
+        XCTAssertEqual(metric(3, .tablespoon), "3 tbsp")
+        XCTAssertEqual(metric(4, .teaspoon), "4 tsp")
+
+        XCTAssertEqual(metric(1, .cup), "240 ml")
+        XCTAssertEqual(metric(0.5, .cup), "120 ml")
+        XCTAssertEqual(metric(Decimal(1) / 3, .cup), "80 ml")
+        XCTAssertEqual(metric(0.25, .cup), "60 ml")
+        XCTAssertEqual(metric(0.75, .cup), "180 ml")
+        XCTAssertEqual(metric(2, .cup), "475 ml")
+        XCTAssertEqual(metric(4, .cup), "950 ml")
+        XCTAssertEqual(metric(5, .cup), "1.2 l")
+        XCTAssertEqual(metric(1, .fluidOunce), "30 ml")
+        XCTAssertEqual(metric(1, .pint), "475 ml")
+        XCTAssertEqual(CulinaryQuantity.range(1, 2, unit: .cup).converted(for: .metric).displayString(), "240–475 ml")
+
+        XCTAssertEqual(metric(1, .pound), "454 g")
+        XCTAssertEqual(metric(8, .ounce), "227 g")
+        XCTAssertEqual(metric(3, .pound), "1.36 kg")
+    }
+
+    func testMetricAmountsAreRoundedAndNeverUseVulgarFractions() {
+        XCTAssertEqual(CulinaryQuantity.exact(Decimal(string: "57.5")!, unit: .gram).converted(for: .metric).displayString(), "58 g")
+        XCTAssertEqual(CulinaryQuantity.exact(Decimal(string: "2.5")!, unit: .milliliter).converted(for: .metric).displayString(), "2.5 ml")
+        XCTAssertEqual(CulinaryQuantity.exact(Decimal(string: "1.5")!, unit: .gram).converted(for: .metric).displayString(), "1.5 g")
+        XCTAssertEqual(CulinaryQuantity.exact(Decimal(string: "1.3")!, unit: .gram).scaled(by: 10 / 9).converted(for: .metric).displayString(), "1.4 g")
+        XCTAssertEqual(CulinaryQuantity.exact(Decimal(string: "999.7")!, unit: .gram).converted(for: .metric).displayString(), "1 kg")
+        XCTAssertEqual(CulinaryQuantity.exact(184, unit: .gram).converted(for: .metric).displayString(), "184 g")
+
+        let fractions = CharacterSet(charactersIn: "⅛⅙¼⅓⅜½⅝⅔¾⅚⅞")
+        let units: [UnitID] = [.gram, .kilogram, .ounce, .pound, .milliliter, .liter, .cup, .fluidOunce, .pint, .shot]
+        for unit in units {
+            for step in 1...400 {
+                let value = Decimal(step) / 8
+                let quantity = CulinaryQuantity.exact(value, unit: unit).converted(for: .metric).displayString()
+                XCTAssertNil(quantity.rangeOfCharacter(from: fractions), "\(value) \(unit.rawValue) → \(quantity)")
+            }
+        }
+    }
+
+    func testImperialKeepsSpoonsAndRoundsConvertedAmountsToKitchenFractions() {
+        func imperial(_ value: Decimal, _ unit: UnitID) -> String {
+            CulinaryQuantity.exact(value, unit: unit).converted(for: .imperial).displayString()
+        }
+
+        XCTAssertEqual(imperial(4, .teaspoon), "4 tsp")
+        XCTAssertEqual(imperial(8, .tablespoon), "8 tbsp")
+        XCTAssertEqual(CulinaryQuantity.exact(2, unit: .teaspoon).scaled(by: Decimal(string: "1.3")!).converted(for: .imperial).displayString(), "2⅝ tsp")
+
+        XCTAssertEqual(imperial(5, .milliliter), "1 tsp")
+        XCTAssertEqual(imperial(Decimal(string: "2.5")!, .milliliter), "½ tsp")
+        XCTAssertEqual(imperial(15, .milliliter), "1 tbsp")
+        XCTAssertEqual(imperial(60, .milliliter), "4 tbsp")
+        XCTAssertEqual(imperial(20, .milliliter), "1⅓ tbsp")
+        XCTAssertEqual(imperial(250, .milliliter), "1 cup")
+        XCTAssertEqual(imperial(115, .gram), "4 oz")
+        XCTAssertEqual(imperial(200, .gram), "7 oz")
+        XCTAssertEqual(imperial(500, .gram), "1⅛ lb")
+        XCTAssertEqual(imperial(1, .kilogram), "2¼ lb")
+        XCTAssertEqual(imperial(Decimal(string: "1.5")!, .gram), "0.05 oz")
+    }
+
+    func testSourceAmountsAreLeftAsWrittenWithMetricDecimals() {
+        for quantity in [
+            CulinaryQuantity.exact(2, unit: .teaspoon),
+            .exact(Decimal(string: "57.5")!, unit: .gram),
+            .exact(Decimal(string: "236.5882365")!, unit: .milliliter),
+            .range(1, 2, unit: .cup),
+        ] {
+            XCTAssertEqual(quantity.converted(for: .source), quantity)
+        }
+        // As written, but grams and millilitres are still decimals, never fractions.
+        XCTAssertEqual(CulinaryQuantity.exact(Decimal(string: "57.5")!, unit: .gram).displayString(), "57.5 g")
+        XCTAssertEqual(CulinaryQuantity.exact(Decimal(string: "2.5")!, unit: .milliliter).displayString(), "2.5 ml")
+        XCTAssertEqual(CulinaryQuantity.exact(Decimal(string: "236.5882365")!, unit: .milliliter).displayString(), "236.59 ml")
+        XCTAssertEqual(CulinaryQuantity.range(Decimal(string: "1.5")!, 2, unit: .liter).displayString(), "1.5–2 l")
+        XCTAssertEqual(CulinaryQuantity.exact(Decimal(string: "1.5")!, unit: .teaspoon).displayString(), "1½ tsp")
+    }
+
+    func testConvertingTwiceGivesTheSameAmount() {
+        for preference in [UnitSystemPreference.metric, .imperial] {
+            for unit in [UnitID.gram, .ounce, .pound, .milliliter, .teaspoon, .tablespoon, .cup, .fluidOunce, .pint] {
+                for step in 1...300 {
+                    let once = CulinaryQuantity.exact(Decimal(step) * Decimal(string: "0.37")!, unit: unit).converted(for: preference)
+                    XCTAssertEqual(once.converted(for: preference), once, "\(step) \(unit.rawValue) \(preference.rawValue)")
+                }
+            }
+        }
     }
 
     func testInvalidSubOneServingYieldResolvesFromUnambiguousSourceLabel() throws {
@@ -195,7 +294,7 @@ final class RecipeCoreTests: XCTestCase {
                 originalServings: malformed.resolvedServings,
                 units: .metric
             ),
-            "453.59 g"
+            "454 g"
         )
 
         var recipe = SampleRecipe.espressoBrownies

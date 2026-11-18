@@ -746,7 +746,7 @@ private extension UnitSystemPreference {
         switch self {
         case .source: "Source"
         case .metric: "Metric"
-        case .imperial: "Imperial"
+        case .imperial: "US customary"
         }
     }
 }

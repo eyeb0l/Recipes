@@ -154,13 +154,18 @@ struct RecipeMonogram: View {
 }
 
 extension UnitSystemPreference {
+    /// `imperial` is stored and sent to the import service, but its volumes are US customary,
+    /// so the app calls it "US" rather than suggest UK imperial pints.
     var displayName: String {
         switch self {
         case .source: "As written"
         case .metric: "Metric"
-        case .imperial: "Imperial"
+        case .imperial: "US"
         }
     }
+
+    /// What the unit choices mean, for footers and hints next to a units picker.
+    static let explanation = "US uses American cups, pints and fluid ounces, sometimes called imperial: a cup is 237 ml and a US pint is 473 ml, not the 568 ml UK pint. Weights use ounces and pounds. Teaspoons and tablespoons stay as written in every system."
 }
 
 extension RecipeSourceType {

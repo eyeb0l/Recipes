@@ -61,7 +61,7 @@ struct ImportRecipeView: View {
                         ForEach(UnitSystemPreference.allCases, id: \.self) { Text($0.displayName).tag($0) }
                     }
                     .pickerStyle(.segmented)
-                    Text("The app keeps the original amounts. You can change display units or servings later.")
+                    Text("The app keeps the original amounts. You can change display units or servings later. \(UnitSystemPreference.explanation)")
                         .font(.footnote)
                         .foregroundStyle(RecipeTheme.secondaryInk)
                 }

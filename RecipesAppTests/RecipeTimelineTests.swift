@@ -136,7 +136,8 @@ final class RecipeTimelineTests: XCTestCase {
         XCTAssertNotNil(workbook.range(of: Data("xl/workbook.xml".utf8)))
         XCTAssertNotNil(workbook.range(of: Data("Timeline".utf8)))
         XCTAssertNotNil(workbook.range(of: Data("Ingredients".utf8)))
-        XCTAssertNotNil(workbook.range(of: Data("Imperial".utf8)))
+        XCTAssertNotNil(workbook.range(of: Data("US customary".utf8)))
+        XCTAssertNil(workbook.range(of: Data("Imperial".utf8)))
         XCTAssertNotNil(workbook.range(of: Data("3 min".utf8)))
         XCTAssertNotNil(workbook.range(of: Data("30–40 min".utf8)))
         XCTAssertNotNil(workbook.range(of: Data("mergeCells".utf8)))
@@ -189,7 +190,7 @@ final class RecipeTimelineTests: XCTestCase {
                 originalServings: request.recipe.recipeYield.servings,
                 units: request.units
             ),
-            "57½ g"
+            "58 g"
         )
     }
 
