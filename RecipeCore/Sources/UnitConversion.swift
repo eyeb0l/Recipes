@@ -93,22 +93,30 @@ public enum CulinaryUnits {
         }
     }
 
+    /// The unit an amount is shown in for `preference`.
+    ///
+    /// Teaspoons and tablespoons are never converted: metric recipes use the same spoon
+    /// measures (1 tsp = 5 ml, 1 tbsp = 15 ml), and US recipes measure small amounts in them too.
+    /// Cups, fluid ounces and pints become millilitres or litres in metric. They are not turned
+    /// into grams, which would need the density of each ingredient.
+    /// Thresholds compare the rounded amount, so an amount that rounds up to 1 kg or 2 cups uses the larger unit.
     public static func preferredUnit(for value: Decimal, unit: UnitID, preference: UnitSystemPreference) -> UnitID {
-        guard preference != .source else { return unit }
+        guard preference != .source, !isSpoon(unit) else { return unit }
         switch dimension(of: unit) {
         case .mass:
             let grams = (try? converted(value, from: unit, to: .gram)) ?? value
             if preference == .metric {
-                return grams >= 1_000 ? .kilogram : .gram
+                return roundedForDisplay(grams, unit: .gram) >= 1_000 ? .kilogram : .gram
             }
             let ounces = (try? converted(grams, from: .gram, to: .ounce)) ?? grams
-            return ounces >= 16 ? .pound : .ounce
+            return roundedForDisplay(ounces, unit: .ounce) >= 16 ? .pound : .ounce
         case .volume:
             let milliliters = (try? converted(value, from: unit, to: .milliliter)) ?? value
             if preference == .metric {
-                return milliliters >= 1_000 ? .liter : .milliliter
+                return roundedForDisplay(milliliters, unit: .milliliter) >= 1_000 ? .liter : .milliliter
             }
-            if milliliters >= 473 { return .pint }
+            let cups = (try? converted(milliliters, from: .milliliter, to: .cup)) ?? 0
+            if roundedForDisplay(cups, unit: .cup) >= 2 { return .pint }
             if milliliters >= 118 { return .cup }
             if milliliters >= 15 { return .tablespoon }
             return .teaspoon
@@ -117,6 +125,87 @@ public enum CulinaryUnits {
         case .none, .count, .qualitative:
             return unit
         }
+    }
+
+    static func isSpoon(_ unit: UnitID) -> Bool {
+        unit == .teaspoon || unit == .tablespoon
+    }
+
+    static func isMetric(_ unit: UnitID) -> Bool {
+        switch unit {
+        case .gram, .kilogram, .milliliter, .liter: true
+        default: false
+        }
+    }
+
+    /// Rounds an amount to something you can measure in `unit`. Amounts in other units are returned as they are.
+    ///
+    /// - Grams: whole grams from 10 g, because kitchen scales read to 1 g; kilograms to 10 g.
+    /// - Millilitres: the coarsest of 1, 5, 10, 25 and 50 ml that stays within 5%, because jugs are read by eye:
+    ///   1 ml below 50 ml, then 5, 10, 25 and 50 ml from 50, 100, 250 and 500 ml. A US cup (236.6 ml) is 240 ml.
+    ///   Litres round to 50 ml.
+    /// - Below 10 g or 10 ml: two significant figures, so small amounts such as raising agents stay accurate.
+    /// - Spoons, cups, pints and fluid ounces: the nearest eighth or third, the sizes in spoon and cup sets.
+    /// - Ounces and pounds: the nearest eighth.
+    /// - Imperial amounts too small for the smallest fraction keep two significant figures.
+    ///
+    /// Every step either divides the next or lands on its boundary, so rounding again changes nothing.
+    static func roundedForDisplay(_ value: Decimal, unit: UnitID) -> Decimal {
+        guard value > 0 else { return value }
+        switch unit {
+        case .gram:
+            return rounded(value, toMultipleOf: value < 10 ? significantStep(for: value) : 1)
+        case .kilogram:
+            return rounded(value, toMultipleOf: Decimal(string: "0.01")!)
+        case .milliliter:
+            let step: Decimal = switch value {
+            case ..<10: significantStep(for: value)
+            case ..<50: 1
+            case ..<100: 5
+            case ..<250: 10
+            case ..<500: 25
+            default: 50
+            }
+            return rounded(value, toMultipleOf: step)
+        case .liter:
+            return rounded(value, toMultipleOf: Decimal(string: "0.05")!)
+        case .teaspoon, .tablespoon, .cup, .fluidOunce, .pint:
+            return roundedToFraction(value, of: eighthsAndThirds)
+        case .ounce, .pound:
+            return roundedToFraction(value, of: eighths)
+        default:
+            return value
+        }
+    }
+
+    private static let eighths: [Decimal] = (0...8).map { Decimal($0) / 8 }
+    private static let eighthsAndThirds: [Decimal] = eighths + [Decimal(1) / 3, Decimal(2) / 3]
+
+    /// The step that keeps two significant figures of an amount below 10.
+    private static func significantStep(for value: Decimal) -> Decimal {
+        var step = Decimal(string: "0.1")!
+        while value < step * 10, step > Decimal(string: "0.0001")! {
+            step /= 10
+        }
+        return step
+    }
+
+    private static func rounded(_ value: Decimal, toMultipleOf step: Decimal) -> Decimal {
+        var quotient = value / step
+        var whole = Decimal()
+        NSDecimalRound(&whole, &quotient, 0, .plain)
+        return whole * step
+    }
+
+    private static func roundedToFraction(_ value: Decimal, of fractions: [Decimal]) -> Decimal {
+        var copy = value
+        var whole = Decimal()
+        NSDecimalRound(&whole, &copy, 0, .down)
+        let remainder = value - whole
+        let nearest = fractions.min { abs($0 - remainder) < abs($1 - remainder) }!
+        let result = whole + nearest
+        // Too small for the smallest fraction: keep two significant figures rather than show nothing.
+        return result > 0 ? result : rounded(value, toMultipleOf: significantStep(for: value))
     }
 
     public static func symbol(for unit: UnitID, plural: Bool = false) -> String {
@@ -164,20 +253,36 @@ public extension CulinaryQuantity {
         return copy
     }
 
+    /// The amount in the units `preference` uses, rounded to what can be measured in them.
+    /// Source amounts are returned exactly as written.
     func converted(for preference: UnitSystemPreference) -> CulinaryQuantity {
-        guard kind != .text else { return self }
+        guard kind != .text, preference != .source else { return self }
         let representative = value ?? lower ?? upper ?? 0
         let preferred = CulinaryUnits.preferredUnit(for: representative, unit: unit, preference: preference)
-        guard preferred != unit else { return self }
+        let roundsInPreference = switch preference {
+        case .metric: CulinaryUnits.isMetric(preferred) || CulinaryUnits.isSpoon(preferred)
+        case .imperial: CulinaryUnits.dimension(of: preferred) == .mass || CulinaryUnits.dimension(of: preferred) == .volume
+        case .source: false
+        }
+        guard preferred != unit || roundsInPreference else { return self }
 
+        let source = unit
+        func convert(_ amount: Decimal) -> Decimal? {
+            let converted = source == preferred ? amount : try? CulinaryUnits.converted(amount, from: source, to: preferred)
+            return converted.map { roundsInPreference ? CulinaryUnits.roundedForDisplay($0, unit: preferred) : $0 }
+        }
         var copy = self
-        copy.value = value.flatMap { try? CulinaryUnits.converted($0, from: unit, to: preferred) }
-        copy.lower = lower.flatMap { try? CulinaryUnits.converted($0, from: unit, to: preferred) }
-        copy.upper = upper.flatMap { try? CulinaryUnits.converted($0, from: unit, to: preferred) }
+        copy.value = value.flatMap(convert)
+        copy.lower = lower.flatMap(convert)
+        copy.upper = upper.flatMap(convert)
         copy.unit = preferred
         return copy
     }
 
+    /// Grams, kilograms, millilitres and litres are written as decimals ("2.5 ml"), never as vulgar fractions:
+    /// kilograms and litres to the gram or millilitre, and amounts under 1 g or 1 ml to three significant figures.
+    /// Other units use fractions where they are close ("½ tsp"), and weights and volumes too small for any fraction
+    /// use decimals.
     func displayString() -> String {
         switch kind {
         case .text:
@@ -202,6 +307,14 @@ public extension CulinaryQuantity {
 
     private func formattedAmount(_ value: Decimal) -> String {
         let number = NSDecimalNumber(decimal: value).doubleValue
+        switch unit {
+        case .kilogram, .liter:
+            return number.formatted(.number.precision(.fractionLength(0...3)))
+        case .gram, .milliliter:
+            return Self.decimalAmount(number)
+        default:
+            break
+        }
         let whole = floor(number + 0.000_001)
         let fraction = number - whole
         let candidates: [(Double, String)] = [
@@ -214,7 +327,10 @@ public extension CulinaryQuantity {
         let amount: String
         if abs(nearest.0 - fraction) < 0.025 {
             if adjustedWhole == 0 {
-                amount = nearest.1.isEmpty ? "0" : nearest.1
+                // A weight or volume below the smallest fraction must not read as nothing. Counts still read "0",
+                // which callers use to leave out amounts too small to show, such as a sliver of a vanilla pod.
+                let measurable = [.mass, .volume].contains(CulinaryUnits.dimension(of: unit))
+                amount = nearest.1.isEmpty ? (number > 0 && measurable ? Self.decimalAmount(number) : "0") : nearest.1
             } else {
                 amount = "\(Int(adjustedWhole))\(nearest.1)"
             }
@@ -222,6 +338,12 @@ public extension CulinaryQuantity {
             amount = number.formatted(.number.precision(.fractionLength(0...2)))
         }
         return amount
+    }
+
+    private static func decimalAmount(_ number: Double) -> String {
+        abs(number) < 1
+            ? number.formatted(.number.precision(.significantDigits(1...3)))
+            : number.formatted(.number.precision(.fractionLength(0...2)))
     }
 }
 

@@ -34,8 +34,8 @@ Each recipe shows its estimated total time along the critical path, how many sta
 
 ### Cook at any size, in your units
 
-- Scale to any number of servings, with friendly kitchen fractions (½, ⅓, ¼).
-- Switch between the recipe as written, metric and imperial.
+- Scale to any number of servings, with friendly kitchen fractions (½, ⅓, ¼) for spoons and cups.
+- Switch between the recipe as written, metric and US measures. Spoon measures stay as written, and metric amounts are rounded to what you can weigh or measure.
 - Every step tells you exactly how much to **add now**, already scaled.
 
 ### Cook mode that keeps up with you

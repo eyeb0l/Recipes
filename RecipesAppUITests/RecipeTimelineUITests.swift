@@ -113,8 +113,8 @@ final class RecipeTimelineUITests: XCTestCase {
         XCTAssertTrue(increment.isHittable)
         increment.tap()
         XCTAssertEqual(increment.value as? String, "10")
-        XCTAssertTrue(app.staticTexts["127.78 g"].waitForExistence(timeout: 3))
-        XCTAssertFalse(app.staticTexts["127.78 kg"].exists)
+        XCTAssertTrue(app.staticTexts["128 g"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["128 kg"].exists)
     }
 
     func testRecipeExportOffersAllSupportedFormats() {

@@ -235,6 +235,8 @@ struct RecipeDetailView: View {
         }
         .pickerStyle(.segmented)
         .frame(maxWidth: 360)
+        .accessibilityHint(UnitSystemPreference.explanation)
+        .help(UnitSystemPreference.explanation)
     }
 
     // MARK: Sections

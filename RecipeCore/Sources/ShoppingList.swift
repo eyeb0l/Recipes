@@ -278,11 +278,23 @@ public enum ShoppingList {
     /// Adds up amounts that share a dimension; otherwise lists them, as in "2 tbsp + a handful".
     static func combinedQuantity(_ quantities: [CulinaryQuantity], units: UnitSystemPreference) -> String? {
         guard let first = quantities.first else { return nil }
-        if quantities.count > 1, let total = sum(quantities, in: first.unit) {
+        if quantities.count > 1, let total = sum(quantities, in: largestUnit(of: quantities)) {
             return total.converted(for: units).displayString()
         }
         let parts = quantities.map { $0.converted(for: units).displayString() }
         return parts.joined(separator: " + ")
+    }
+
+    /// The unit of the largest amount, so 1 cup and 1 tsp add up in cups whichever comes first, rather than
+    /// in teaspoons, which every unit system keeps as they are.
+    private static func largestUnit(of quantities: [CulinaryQuantity]) -> UnitID {
+        let base: UnitID = CulinaryUnits.dimension(of: quantities[0].unit) == .mass ? .gram : .milliliter
+        func size(_ quantity: CulinaryQuantity) -> Decimal {
+            let amount = quantity.upper ?? quantity.value ?? 0
+            return (try? CulinaryUnits.converted(amount, from: quantity.unit, to: base)) ?? -1
+        }
+        // max(by:) keeps the first of equal amounts, so amounts that can't be compared keep the first unit.
+        return quantities.max { size($0) < size($1) }!.unit
     }
 
     private static func sum(_ quantities: [CulinaryQuantity], in unit: UnitID) -> CulinaryQuantity? {
