@@ -45,6 +45,11 @@ Each recipe shows its estimated total time along the critical path, how many sta
 - Keeps the screen awake while you cook, and shows progress in a **Live Activity** on the Lock Screen and in the Dynamic Island.
 - Remembers where you were, including your servings and units, if you leave and come back.
 
+### Shop and swap
+
+- **Substitutes**: ingredients with a common swap show a ⇄ button. It lists what can stand in, such as oil for melted butter or a flaxseed egg, with amounts scaled to your servings and units, and says how each one changes the result.
+- **Shopping list**: add the ingredients to any list in **Reminders**, at the servings you've chosen. Anything you've ticked off as gathered is left out, and items already on the list are updated rather than added twice.
+
 ### Make it yours
 
 - Edit any recipe: ingredients, stages and timings. On iPad, drag stages around; on iPhone, reorder them in a list.
@@ -55,11 +60,13 @@ Each recipe shows its estimated total time along the critical path, how many sta
 
 Your recipe library syncs between your devices through your own private iCloud database; if iCloud isn't available, it's kept on the device. Signing in with Apple is only needed to import recipes.
 
+Substitutes come from a catalogue built into the app, so looking them up sends nothing anywhere. Shopping lists are written straight to Reminders on your device, and the app asks for access the first time you add one.
+
 Cookbook photos are used only to read the recipe: they're sent for that one request and never stored in your library. The import service doesn't log or keep what you send it or the recipes it returns. See [Architecture](docs/architecture.md#data-boundaries) for the details.
 
 ## Status
 
-Recipe Timeline is in private testing through TestFlight. Ingredient substitutions and Reminders shopping lists are planned next.
+Recipe Timeline is in private testing through TestFlight.
 
 ## For developers
 

@@ -149,6 +149,8 @@ struct TimelineGridView: View {
     var cookPresentation: TimelineCookPresentation?
     var onMoveStage: ((String, String) -> Void)?
     var showsFullContent = false
+    /// Shows substitutes for an ingredient. When set, ingredients with known substitutes offer them.
+    var onShowSubstitutes: ((Ingredient) -> Void)?
 
     @ScaledMetric(relativeTo: .body) private var ingredientWidth: CGFloat = 274
     @ScaledMetric(relativeTo: .body) private var rowHeight: CGFloat = 92
@@ -243,12 +245,28 @@ struct TimelineGridView: View {
                         .font(.body)
                         .lineLimit(2)
                     Spacer(minLength: 0)
+                    if let onShowSubstitutes, IngredientSubstitutions.hasSubstitutes(for: ingredient.name) {
+                        Button {
+                            onShowSubstitutes(ingredient)
+                        } label: {
+                            Image(systemName: "arrow.left.arrow.right")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(RecipeTheme.focus)
+                                .frame(minWidth: 32, minHeight: 32)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 5 }
+                        .accessibilityHidden(true)
+                        .accessibilityIdentifier("substitutes-\(ingredient.id)")
+                    }
                 }
                 .padding(.horizontal, 14)
                 .frame(width: metrics.ingredientWidth, height: metrics.rowHeight, alignment: .leading)
                 .background(RecipeTheme.surface)
                 .overlay(alignment: .bottom) { Rectangle().fill(RecipeTheme.gridSubtle).frame(height: 0.75) }
                 .accessibilityElement(children: .combine)
+                .modifier(SubstitutesAccessibilityAction(ingredient: ingredient, onShowSubstitutes: onShowSubstitutes))
             }
         }
         .frame(width: metrics.ingredientWidth)
@@ -334,6 +352,20 @@ struct TimelineGridView: View {
         }
         .frame(width: geometry.contentWidth, height: geometry.contentHeight)
         .background(RecipeTheme.surface)
+    }
+}
+
+/// Offers substitutes as a VoiceOver action, since the row reads as one combined element.
+private struct SubstitutesAccessibilityAction: ViewModifier {
+    let ingredient: Ingredient
+    let onShowSubstitutes: ((Ingredient) -> Void)?
+
+    func body(content: Content) -> some View {
+        if let onShowSubstitutes, IngredientSubstitutions.hasSubstitutes(for: ingredient.name) {
+            content.accessibilityAction(named: "Substitutes") { onShowSubstitutes(ingredient) }
+        } else {
+            content
+        }
     }
 }
 

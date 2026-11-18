@@ -16,10 +16,16 @@ Each `RecipeRecord` stores versioned canonical JSON plus searchable metadata and
 
 A stage is ready when it is incomplete and all dependency IDs are complete. Multiple ready stages can run in parallel; one is focused. Timers are independent persisted records with absolute end dates, so reconciliation after termination is deterministic. One Live Activity summarizes the whole session and points back through `recipetimeline://cook?session=…`.
 
+## Substitutions and shopping lists
+
+`IngredientSubstitutions` is a curated, offline catalogue in RecipeCore. Rules match ingredient names by whole words (allowing plurals), skip look-alikes through excluded words ("peanut" in "peanut butter"), and the longest matching phrase wins across rules. Each component's amount is either a share of the original amount, set per dimension so a ratio that makes no sense for counted items yields no amount, or a fixed amount per reference quantity for swaps that change units, such as one tablespoon of ground flaxseed per egg. Amounts are scaled and converted like the recipe's own quantities. Substitutes are guidance only; they never change the canonical recipe.
+
+`ShoppingList` turns a recipe into items to buy at the chosen servings, combining ingredients with the same name and adding up their amounts when the units allow. `ShoppingList.plan` merges those items into a Reminders list without duplicates: each item is a reminder titled with the ingredient, so Reminders' grocery lists can sort it into sections, and the amount and recipe go on their own line in its notes. An incomplete reminder with the same name is reused, and adding a recipe again replaces its line instead of adding another. The app writes the plan through `ShoppingReminderStore`, backed by EventKit, with an in-memory store for tests and `--ui-testing` launches.
+
 ## Import trust boundary
 
 The app never contains provider secrets. It authenticates to the Worker with Sign in with Apple, then submits one normalized source. URL fetching and provider invocation occur only in the Worker. The model returns canonical data; the backend and app independently validate graph references and cycles before deterministic rendering.
 
 ## Data boundaries
 
-Canonical recipes and cleaned source text are stored by the app. Cookbook images are normalized on device, uploaded only for the extraction request, and never inserted into SwiftData. Active cooking state is stored separately in the App Group so Live Activity intents do not write cook progress into CloudKit. The Worker stores only opaque session material, token hashes, and quota counters; request bodies and canonical results are not logged or retained.
+Canonical recipes and cleaned source text are stored by the app. Cookbook images are normalized on device, uploaded only for the extraction request, and never inserted into SwiftData. Active cooking state is stored separately in the App Group so Live Activity intents do not write cook progress into CloudKit. Shopping lists go to Reminders on the device through EventKit, with full Reminders access because the app reads the chosen list to avoid duplicates. Substitution lookups never leave the device. The Worker stores only opaque session material, token hashes, and quota counters; request bodies and canonical results are not logged or retained.

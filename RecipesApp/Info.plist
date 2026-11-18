@@ -43,6 +43,8 @@
 	<string>Photograph cookbook pages to turn them into editable recipe timelines.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Choose cookbook photos to turn them into editable recipe timelines.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Add a recipe's ingredients to a shopping list in Reminders, without adding anything that's already on it.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIBackgroundModes</key>

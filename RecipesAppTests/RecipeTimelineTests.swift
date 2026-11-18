@@ -345,6 +345,104 @@ final class RecipeTimelineTests: XCTestCase {
         XCTAssertNotEqual(CloudSyncMonitor.lastSyncedDescription(for: now.addingTimeInterval(-600), relativeTo: now), "Just now")
     }
 
+    func testShoppingListStartsWithGatheredIngredientsUnselected() {
+        let request = ShoppingListRequest(
+            recipe: SampleRecipe.espressoBrownies,
+            servings: 9,
+            units: .metric,
+            gatheredIngredientIDs: ["butter", "salt"]
+        )
+        XCTAssertEqual(request.items.count, 9)
+        XCTAssertEqual(request.initiallyExcludedIDs, ["butter", "salt"])
+    }
+
+    @MainActor
+    func testAddingAShoppingListAsksForAccessAndNeverDuplicatesReminders() async throws {
+        let groceries = ReminderListSummary(id: "groceries", title: "Groceries")
+        let store = InMemoryShoppingReminderStore(lists: [groceries])
+        store.insert(.init(id: "existing", listID: "groceries", title: "Large egg", notes: "6 · Pancakes"))
+        store.insert(.init(id: "done", listID: "groceries", title: "Caster sugar", notes: nil, isCompleted: true))
+        let items = ShoppingList.items(for: SampleRecipe.espressoBrownies, servings: 9, units: .metric)
+
+        do {
+            _ = try await store.add(items, recipeTitle: "Espresso Brownies", toList: "groceries")
+            XCTFail("Adding without access should fail")
+        } catch {
+            XCTAssertEqual(error as? ShoppingReminderError, .accessDenied)
+        }
+
+        let granted = try await store.requestAccess()
+        XCTAssertTrue(granted)
+        let first = try await store.add(items, recipeTitle: "Espresso Brownies", toList: "groceries")
+        XCTAssertEqual(first, .init(listTitle: "Groceries", addedCount: 8, updatedCount: 1, alreadyListedCount: 0))
+        XCTAssertEqual(store.reminders.first { $0.id == "existing" }?.notes, "6 · Pancakes\n2 · Espresso Brownies")
+        XCTAssertEqual(store.reminders.filter { $0.title == "Caster sugar" }.count, 2, "A completed reminder is not reused")
+
+        let second = try await store.add(items, recipeTitle: "Espresso Brownies", toList: "groceries")
+        XCTAssertEqual(second, .init(listTitle: "Groceries", addedCount: 0, updatedCount: 0, alreadyListedCount: 9))
+        XCTAssertEqual(store.reminders.count, 10)
+
+        do {
+            _ = try await store.add(items, recipeTitle: "Espresso Brownies", toList: "deleted")
+            XCTFail("Adding to a missing list should fail")
+        } catch {
+            XCTAssertEqual(error as? ShoppingReminderError, .listUnavailable)
+        }
+    }
+
+    @MainActor
+    func testAPlanIsNotAppliedOverChangesMadeSinceItWasWorkedOut() async throws {
+        let store = InMemoryShoppingReminderStore(lists: [.init(id: "groceries", title: "Groceries")], access: .granted)
+        store.insert(.init(id: "eggs", listID: "groceries", title: "Large eggs", notes: "6 · Pancakes"))
+        let items = [ShoppingListItem(id: "eggs", ingredientIDs: ["eggs"], name: "Large eggs", quantity: "2")]
+        let plan = ShoppingList.plan(
+            adding: items,
+            recipeTitle: "Brownies",
+            to: try await store.incompleteReminders(inList: "groceries")
+        )
+
+        // Edited in Reminders after the fetch, renamed, completed, then deleted.
+        for change in [
+            { (reminder: inout InMemoryShoppingReminderStore.Reminder) in reminder.title = "Milk" },
+            { (reminder: inout InMemoryShoppingReminderStore.Reminder) in reminder.notes = "6 · Pancakes\nfree range" },
+            { (reminder: inout InMemoryShoppingReminderStore.Reminder) in reminder.isCompleted = true }
+        ] {
+            let original = store.reminders
+            change(&store.reminders[0])
+            let changed = store.reminders
+            XCTAssertThrowsError(try store.apply(plan, toList: "groceries")) { error in
+                XCTAssertEqual(error as? ShoppingReminderError, .listChanged)
+            }
+            XCTAssertEqual(store.reminders, changed, "Nothing is written when the list has changed")
+            store.reminders = original
+        }
+        store.reminders = []
+        XCTAssertThrowsError(try store.apply(plan, toList: "groceries"))
+
+        store.insert(.init(id: "eggs", listID: "groceries", title: "Large eggs", notes: "6 · Pancakes"))
+        XCTAssertNoThrow(try store.apply(plan, toList: "groceries"))
+        XCTAssertEqual(store.reminders.first?.notes, "6 · Pancakes\n2 · Brownies")
+    }
+
+    @MainActor
+    func testDeniedRemindersAccessIsReportedWithoutWriting() async throws {
+        let store = InMemoryShoppingReminderStore(lists: [.init(id: "groceries", title: "Groceries")], grantsAccessOnRequest: false)
+        let granted = try await store.requestAccess()
+        XCTAssertFalse(granted)
+        XCTAssertEqual(store.access, .denied)
+        XCTAssertTrue(store.writableLists().isEmpty)
+        XCTAssertTrue(store.reminders.isEmpty)
+    }
+
+    func testSubstitutesRequestScalesFromARepairedYield() throws {
+        var recipe = SampleRecipe.espressoBrownies
+        recipe.recipeYield = .init(servings: 0.009, label: "9 squares")
+        let butter = try XCTUnwrap(recipe.ingredients.first { $0.id == "butter" })
+        let request = IngredientSubstitutesRequest(ingredient: butter, recipe: recipe, servings: 18, units: .metric)
+        XCTAssertEqual(request.displayQuantity, "230 g")
+        XCTAssertEqual(request.substitutes.first?.components.first?.quantity?.displayString(), "230 g")
+    }
+
     private static func syncEvent(
         id: UUID = UUID(),
         kind: CloudSyncEvent.Kind,

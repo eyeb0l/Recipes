@@ -51,7 +51,7 @@ xcodebuild test \
   CODE_SIGNING_ALLOWED=NO
 ```
 
-Add `-only-testing:RecipeCoreTests -only-testing:RecipeTimelineTests` to run only the unit tests, as CI does. Unit tests run inside the app with an in-memory library that never touches CloudKit. UI tests launch the app with `--ui-testing`, which seeds the Espresso Brownies sample recipe.
+Add `-only-testing:RecipeCoreTests -only-testing:RecipeTimelineTests` to run only the unit tests, as CI does. Unit tests run inside the app with an in-memory library that never touches CloudKit. UI tests launch the app with `--ui-testing`, which seeds the Espresso Brownies sample recipe and swaps Reminders for an in-memory store with a single "Groceries" list, so no permission prompt appears.
 
 The project compiles all app, framework, Live Activity, unit-test, and UI-test bundles without signing. Running tests needs a simulator; physical devices need a signing setup.
 

@@ -190,6 +190,8 @@ enum AppPreferenceKey {
     static let unitSystem = "preferredUnitSystem"
     static let librarySort = "librarySort"
     static let lastCloudSync = "lastCloudSyncDate"
+    /// The Reminders list a shopping list was last added to.
+    static let shoppingReminderList = "shoppingReminderListID"
 }
 
 /// Lays out children left to right, wrapping to a new line when the next child would not fit.

@@ -68,6 +68,7 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         NSCameraUsageDescription: Photograph cookbook pages to turn them into editable recipe timelines.
         NSPhotoLibraryUsageDescription: Choose cookbook photos to turn them into editable recipe timelines.
+        NSRemindersFullAccessUsageDescription: Add a recipe's ingredients to a shopping list in Reminders, without adding anything that's already on it.
         NSSupportsLiveActivities: true
         UIBackgroundModes:
           - remote-notification
