@@ -391,6 +391,39 @@ final class RecipeTimelineTests: XCTestCase {
     }
 
     @MainActor
+    func testAPlanIsNotAppliedOverChangesMadeSinceItWasWorkedOut() async throws {
+        let store = InMemoryShoppingReminderStore(lists: [.init(id: "groceries", title: "Groceries")], access: .granted)
+        store.insert(.init(id: "eggs", listID: "groceries", title: "Large eggs", notes: "6 · Pancakes"))
+        let items = [ShoppingListItem(id: "eggs", ingredientIDs: ["eggs"], name: "Large eggs", quantity: "2")]
+        let plan = ShoppingList.plan(
+            adding: items,
+            recipeTitle: "Brownies",
+            to: try await store.incompleteReminders(inList: "groceries")
+        )
+
+        // Edited in Reminders after the fetch, then completed, then deleted.
+        for change in [
+            { (reminder: inout InMemoryShoppingReminderStore.Reminder) in reminder.notes = "6 · Pancakes\nfree range" },
+            { (reminder: inout InMemoryShoppingReminderStore.Reminder) in reminder.isCompleted = true }
+        ] {
+            let original = store.reminders
+            change(&store.reminders[0])
+            let changed = store.reminders
+            XCTAssertThrowsError(try store.apply(plan, toList: "groceries")) { error in
+                XCTAssertEqual(error as? ShoppingReminderError, .listChanged)
+            }
+            XCTAssertEqual(store.reminders, changed, "Nothing is written when the list has changed")
+            store.reminders = original
+        }
+        store.reminders = []
+        XCTAssertThrowsError(try store.apply(plan, toList: "groceries"))
+
+        store.insert(.init(id: "eggs", listID: "groceries", title: "Large eggs", notes: "6 · Pancakes"))
+        XCTAssertNoThrow(try store.apply(plan, toList: "groceries"))
+        XCTAssertEqual(store.reminders.first?.notes, "6 · Pancakes\n2 · Brownies")
+    }
+
+    @MainActor
     func testDeniedRemindersAccessIsReportedWithoutWriting() async throws {
         let store = InMemoryShoppingReminderStore(lists: [.init(id: "groceries", title: "Groceries")], grantsAccessOnRequest: false)
         let granted = try await store.requestAccess()

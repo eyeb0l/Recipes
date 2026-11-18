@@ -19,6 +19,7 @@ enum ShoppingReminderError: LocalizedError, Equatable {
     case accessDenied
     case noWritableList
     case listUnavailable
+    case listChanged
 
     var errorDescription: String? {
         switch self {
@@ -28,6 +29,8 @@ enum ShoppingReminderError: LocalizedError, Equatable {
             "There's no Reminders list that can be changed. Create a list in Reminders, then try again."
         case .listUnavailable:
             "That Reminders list is no longer available. Choose another list."
+        case .listChanged:
+            "The Reminders list changed while the items were being added, so nothing was added. Try again."
         }
     }
 }
@@ -48,6 +51,8 @@ protocol ShoppingReminderStore: AnyObject {
     func writableLists() -> [ReminderListSummary]
     func defaultListID() -> String?
     func incompleteReminders(inList listID: String) async throws -> [ExistingShoppingReminder]
+    /// Applies a plan, or throws `listChanged` without changing anything if a reminder it updates has
+    /// since been edited, completed, moved or deleted.
     func apply(_ plan: ShoppingReminderPlan, toList listID: String) throws
 }
 
@@ -137,7 +142,14 @@ final class EventKitShoppingReminderStore: ShoppingReminderStore {
         }
         do {
             for update in plan.notesUpdates {
-                guard let reminder = store.calendarItem(withIdentifier: update.reminderID) as? EKReminder else { continue }
+                // The plan was worked out from a fetch that may now be out of date. Never write over a
+                // change made since, in Reminders or on another device.
+                guard let reminder = store.calendarItem(withIdentifier: update.reminderID) as? EKReminder,
+                      reminder.refresh(),
+                      !reminder.isCompleted,
+                      reminder.calendar?.calendarIdentifier == listID,
+                      reminder.notes == update.previousNotes
+                else { throw ShoppingReminderError.listChanged }
                 reminder.notes = update.notes
                 try store.save(reminder, commit: false)
             }
@@ -170,7 +182,8 @@ final class InMemoryShoppingReminderStore: ShoppingReminderStore {
     }
 
     var access: ReminderAccess
-    private(set) var reminders: [Reminder] = []
+    /// Settable so tests can change a reminder between planning and applying.
+    var reminders: [Reminder] = []
     private let lists: [ReminderListSummary]
     private let grantsAccessOnRequest: Bool
 
@@ -196,8 +209,15 @@ final class InMemoryShoppingReminderStore: ShoppingReminderStore {
 
     func apply(_ plan: ShoppingReminderPlan, toList listID: String) throws {
         guard lists.contains(where: { $0.id == listID }) else { throw ShoppingReminderError.listUnavailable }
-        for update in plan.notesUpdates {
-            guard let index = reminders.firstIndex(where: { $0.id == update.reminderID }) else { continue }
+        let indices = try plan.notesUpdates.map { update in
+            guard let index = reminders.firstIndex(where: { $0.id == update.reminderID }),
+                  !reminders[index].isCompleted,
+                  reminders[index].listID == listID,
+                  reminders[index].notes == update.previousNotes
+            else { throw ShoppingReminderError.listChanged }
+            return index
+        }
+        for (index, update) in zip(indices, plan.notesUpdates) {
             reminders[index].notes = update.notes
         }
         for item in plan.newReminders {

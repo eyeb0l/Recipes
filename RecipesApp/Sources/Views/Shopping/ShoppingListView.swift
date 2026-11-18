@@ -55,6 +55,8 @@ struct ShoppingListView: View {
             .toolbar {
                 ToolbarItem(placement: result == nil ? .cancellationAction : .confirmationAction) {
                     Button(result == nil ? "Cancel" : "Done") { dismiss() }
+                        // Dismissing wouldn't stop an add that's under way.
+                        .disabled(isAdding)
                 }
             }
             .safeAreaBar(edge: .bottom) {
@@ -62,6 +64,7 @@ struct ShoppingListView: View {
             }
         }
         .editorialSurface()
+        .interactiveDismissDisabled(isAdding)
         .task {
             guard !hasLoaded else { return }
             hasLoaded = true
@@ -157,6 +160,7 @@ struct ShoppingListView: View {
                         Text(list.title).tag(list.id)
                     }
                 }
+                .disabled(isAdding)
                 .listRowBackground(RecipeTheme.surface)
                 .accessibilityIdentifier("shopping-list-picker")
             }
@@ -237,9 +241,10 @@ struct ShoppingListView: View {
                 refreshLists(from: store)
                 guard granted else { return }
             }
-            guard !listID.isEmpty else { throw ShoppingReminderError.noWritableList }
-            let result = try await store.add(selectedItems, recipeTitle: request.recipeTitle, toList: listID)
-            savedListID = listID
+            let destination = listID
+            guard !destination.isEmpty else { throw ShoppingReminderError.noWritableList }
+            let result = try await store.add(selectedItems, recipeTitle: request.recipeTitle, toList: destination)
+            savedListID = destination
             withAnimation(.snappy) { self.result = result }
         } catch {
             refreshLists(from: store)

@@ -142,6 +142,7 @@ final class RecipeTimelineUITests: XCTestCase {
 
         let substitutes = app.buttons["substitutes-butter"]
         XCTAssertTrue(substitutes.waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["substitutes-cocoa"].exists, "Cocoa has no substitutes, so offers none")
         substitutes.tap()
 
         XCTAssertTrue(app.navigationBars["Substitutes"].waitForExistence(timeout: 5))
@@ -149,7 +150,6 @@ final class RecipeTimelineUITests: XCTestCase {
         // 230 g of butter for 18 servings becomes four-fifths as much oil.
         XCTAssertTrue(app.staticTexts["184 g"].exists)
         attachScreenshot(named: "ingredient-substitutes")
-        XCTAssertFalse(app.buttons["substitutes-cocoa"].exists, "Cocoa has no substitutes, so offers none")
     }
 
     func testShoppingListAddsSelectedIngredientsToReminders() {

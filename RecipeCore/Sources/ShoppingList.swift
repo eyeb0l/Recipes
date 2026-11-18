@@ -40,6 +40,8 @@ public struct ShoppingReminderPlan: Equatable, Sendable {
     public struct NotesUpdate: Equatable, Sendable {
         public var reminderID: String
         public var notes: String
+        /// The notes this update was worked out from. A store applies it only if they're unchanged.
+        public var previousNotes: String?
     }
 
     public var newReminders: [NewReminder] = []
@@ -82,7 +84,8 @@ public enum ShoppingList {
     /// The reminder note for an item: its amount and the recipe it's for, such as "200 g · Brownies".
     public static func reminderNote(for item: ShoppingListItem, recipeTitle: String) -> String {
         [item.quantity, recipeTitle].compactMap { value in
-            guard let value, !value.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+            // Trimmed, since notes lines are compared trimmed when the recipe is added again.
+            guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
             return value
         }
         .joined(separator: " · ")
@@ -106,6 +109,7 @@ public enum ShoppingList {
         }
         var updatedNotes: [String: String] = [:]
         var updateOrder: [String] = []
+        var remindersByID: [String: ExistingShoppingReminder] = [:]
 
         for item in items {
             let note = reminderNote(for: item, recipeTitle: recipeTitle)
@@ -113,25 +117,102 @@ public enum ShoppingList {
                 plan.newReminders.append(.init(title: item.name, notes: note))
                 continue
             }
-            var lines = (updatedNotes[reminder.id] ?? reminder.notes ?? "")
-                .split(whereSeparator: \.isNewline)
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
-            if lines.contains(note) {
+            let current = updatedNotes[reminder.id] ?? reminder.notes ?? ""
+            // Keep the notes exactly as they are, including anything the person wrote themselves and
+            // whichever line breaks they used.
+            var lines = notesLines(current)
+            let trimmed = lines.map { $0.text.trimmingCharacters(in: .whitespaces) }
+            if trimmed.contains(note) {
                 plan.alreadyListedCount += 1
                 continue
             }
-            // One line per recipe: adding it again at a different amount replaces its earlier line.
-            if let index = lines.firstIndex(where: { $0 == recipeTitle || $0.hasSuffix(" · \(recipeTitle)") }) {
-                lines[index] = note
+            let updated: String
+            // One line per recipe: adding it again at a different amount replaces the line it wrote before,
+            // but only when exactly one line could be that line. Otherwise the new line is added below.
+            let earlier = trimmed.indices.filter { isEarlierLine(trimmed[$0], for: note, recipeTitle: recipeTitle) }
+            if earlier.count == 1, let index = earlier.first {
+                lines[index].text = note
+                updated = lines.map { $0.text + $0.lineBreak }.joined()
+            } else if current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                updated = note
             } else {
-                lines.append(note)
+                updated = current + (current.last?.isNewline == true ? "" : "\n") + note
             }
-            if updatedNotes[reminder.id] == nil { updateOrder.append(reminder.id) }
-            updatedNotes[reminder.id] = lines.joined(separator: "\n")
+            if updatedNotes[reminder.id] == nil {
+                updateOrder.append(reminder.id)
+                remindersByID[reminder.id] = reminder
+            }
+            updatedNotes[reminder.id] = updated
         }
-        plan.notesUpdates = updateOrder.map { .init(reminderID: $0, notes: updatedNotes[$0] ?? "") }
+        plan.notesUpdates = updateOrder.map {
+            .init(reminderID: $0, notes: updatedNotes[$0] ?? "", previousNotes: remindersByID[$0]?.notes)
+        }
         return plan
+    }
+
+    /// Notes split into lines, each with the line break that ended it ("" for the last line).
+    static func notesLines(_ notes: String) -> [(text: String, lineBreak: String)] {
+        var lines: [(text: String, lineBreak: String)] = []
+        var text = ""
+        for character in notes {
+            if character.isNewline {
+                lines.append((text, String(character)))
+                text = ""
+            } else {
+                text.append(character)
+            }
+        }
+        lines.append((text, ""))
+        return lines
+    }
+
+    /// Whether `line` could be the line this app wrote for the recipe before, at other servings: it's for
+    /// exactly the same recipe title, and its amount differs from the new one only in its numbers. So
+    /// "1 clove · Stew" is, but "2 dozen in the cupboard · Stew" and "1 clove · Stew 2" aren't.
+    static func isEarlierLine(_ line: String, for note: String, recipeTitle: String) -> Bool {
+        let suffix = " · \(recipeTitle.trimmingCharacters(in: .whitespacesAndNewlines))"
+        guard line.hasSuffix(suffix), note.hasSuffix(suffix) else { return false }
+        let earlier = String(line.dropLast(suffix.count))
+        let amount = String(note.dropLast(suffix.count))
+        return !earlier.isEmpty && amountPattern(earlier) == amountPattern(amount)
+    }
+
+    /// An amount with its numbers blanked out and plurals ignored, so "1 clove" and "2 cloves" match.
+    static func amountPattern(_ amount: String) -> String {
+        var pattern = ""
+        var word = ""
+        var inNumber = false
+        func endWord() {
+            // Ignore plurals: "clove" and "cloves", "pinch" and "pinches".
+            var stem = word.lowercased()
+            if stem.hasSuffix("s") { stem.removeLast() }
+            if stem.hasSuffix("e") { stem.removeLast() }
+            pattern += stem
+            word = ""
+        }
+        let characters = Array(amount)
+        for (index, character) in characters.enumerated() {
+            // Inside a number, decimal and grouping separators belong to it, including the spaces some
+            // locales group digits with, as in "1 200,5".
+            let continuesNumber = inNumber
+                && (character.isWhitespace || ".,/'’٫٬".contains(character))
+                && characters.indices.contains(index + 1) && characters[index + 1].isNumber
+            if character.isNumber || continuesNumber {
+                endWord()
+                // A character no one types, so a literal "#" in a note isn't mistaken for a number.
+                if !inNumber { pattern += "\u{E000}" }
+                inNumber = true
+            } else if character.isLetter {
+                inNumber = false
+                word.append(character)
+            } else {
+                endWord()
+                inNumber = false
+                pattern.append(character)
+            }
+        }
+        endWord()
+        return pattern
     }
 
     // MARK: Helpers

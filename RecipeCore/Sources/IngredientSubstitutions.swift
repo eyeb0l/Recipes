@@ -4,7 +4,8 @@ import Foundation
 public struct IngredientSubstitute: Hashable, Identifiable, Sendable {
     public struct Component: Hashable, Sendable {
         public var name: String
-        /// The amount to use, or `nil` when it can't be worked out from the recipe's amount.
+        /// The amount to use, or `nil` when it can't be worked out from the recipe's amount or is too
+        /// small to show as anything but zero.
         public var quantity: CulinaryQuantity?
 
         public init(name: String, quantity: CulinaryQuantity?) {
@@ -55,7 +56,10 @@ public enum IngredientSubstitutions {
                 components: option.components.map { component in
                     .init(
                         name: component.name,
-                        quantity: base.flatMap { component.amount.quantity(replacing: $0) }?.converted(for: units)
+                        quantity: base
+                            .flatMap { component.amount.quantity(replacing: $0) }?
+                            .converted(for: units)
+                            .nonZeroForDisplay
                     )
                 },
                 note: option.note
@@ -251,7 +255,7 @@ extension IngredientSubstitutions {
         SubstitutionRule(
             "butter",
             phrases: ["butter"],
-            excluding: ["peanut", "nut", "almond", "cashew", "apple", "cocoa", "shea", "bean", "lettuce", "icing"],
+            excluding: ["peanut", "nut", "almond", "cashew", "seed", "apple", "cocoa", "shea", "bean", "lettuce", "icing"],
             options: [
                 .init("unsalted", "Unsalted butter", [.component("unsalted butter", .same())],
                       note: "Add a pinch of salt if the dish tastes flat."),
@@ -331,7 +335,7 @@ extension IngredientSubstitutions {
         ),
         SubstitutionRule(
             "icing-sugar",
-            phrases: ["icing sugar", "powdered sugar", "confectioners sugar"],
+            phrases: ["icing sugar", "powdered sugar", "confectioners sugar", "confectioner's sugar"],
             options: [
                 .init("blended", "Blended granulated sugar", [.component("granulated sugar", .same())],
                       note: "Blitz in a clean, dry blender until very fine. Good for icing and dusting, not for meringues.")
@@ -560,4 +564,14 @@ extension IngredientSubstitutions {
             ]
         )
     ]
+}
+
+private extension CulinaryQuantity {
+    /// `nil` for an amount that would display as "0", such as a sliver of a vanilla pod.
+    var nonZeroForDisplay: CulinaryQuantity? {
+        guard kind != .text else { return self }
+        // Ask the formatter rather than repeat its rounding.
+        let amount = displayString().split(separator: " ").first.map(String.init)
+        return amount == "0" || amount == "0–0" ? nil : self
+    }
 }
