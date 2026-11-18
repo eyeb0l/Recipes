@@ -134,6 +134,20 @@ final class ShoppingListTests: XCTestCase {
         XCTAssertEqual(items[2].quantity, "3")
     }
 
+    func testMixedVolumesAddUpInTheLargestUnitWhicheverComesFirst() {
+        let cup = CulinaryQuantity.exact(1, unit: .cup)
+        let teaspoon = CulinaryQuantity.exact(1, unit: .teaspoon)
+        for units in UnitSystemPreference.allCases {
+            XCTAssertEqual(
+                ShoppingList.combinedQuantity([teaspoon, cup], units: units),
+                ShoppingList.combinedQuantity([cup, teaspoon], units: units),
+                units.rawValue
+            )
+        }
+        XCTAssertEqual(ShoppingList.combinedQuantity([teaspoon, cup], units: .metric), "240 ml")
+        XCTAssertEqual(ShoppingList.combinedQuantity([teaspoon, .exact(2, unit: .tablespoon)], units: .metric), "2⅓ tbsp")
+    }
+
     func testPlanReusesMatchingRemindersAndNeverDuplicatesARecipe() {
         let items = [
             ShoppingListItem(id: "eggs", ingredientIDs: ["eggs"], name: "Large eggs", quantity: "2"),

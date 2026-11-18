@@ -281,7 +281,8 @@ public extension CulinaryQuantity {
 
     /// Grams, kilograms, millilitres and litres are written as decimals ("2.5 ml"), never as vulgar fractions:
     /// kilograms and litres to the gram or millilitre, and amounts under 1 g or 1 ml to three significant figures.
-    /// Other units use fractions where they are close ("½ tsp"), and decimals for amounts too small for any fraction.
+    /// Other units use fractions where they are close ("½ tsp"), and weights and volumes too small for any fraction
+    /// use decimals.
     func displayString() -> String {
         switch kind {
         case .text:
@@ -326,8 +327,10 @@ public extension CulinaryQuantity {
         let amount: String
         if abs(nearest.0 - fraction) < 0.025 {
             if adjustedWhole == 0 {
-                // A real amount below the smallest fraction must not read as nothing.
-                amount = nearest.1.isEmpty ? (number > 0 ? Self.decimalAmount(number) : "0") : nearest.1
+                // A weight or volume below the smallest fraction must not read as nothing. Counts still read "0",
+                // which callers use to leave out amounts too small to show, such as a sliver of a vanilla pod.
+                let measurable = [.mass, .volume].contains(CulinaryUnits.dimension(of: unit))
+                amount = nearest.1.isEmpty ? (number > 0 && measurable ? Self.decimalAmount(number) : "0") : nearest.1
             } else {
                 amount = "\(Int(adjustedWhole))\(nearest.1)"
             }
