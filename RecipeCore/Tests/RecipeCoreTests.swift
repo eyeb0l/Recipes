@@ -266,6 +266,19 @@ final class RecipeCoreTests: XCTestCase {
         XCTAssertEqual(CulinaryQuantity.exact(Decimal(string: "236.5882365")!, unit: .milliliter).displayString(), "236.59 ml")
         XCTAssertEqual(CulinaryQuantity.range(Decimal(string: "1.5")!, 2, unit: .liter).displayString(), "1.5–2 l")
         XCTAssertEqual(CulinaryQuantity.exact(Decimal(string: "1.5")!, unit: .teaspoon).displayString(), "1½ tsp")
+        XCTAssertEqual(CulinaryQuantity.exact(Decimal(string: "0.125")!, unit: .kilogram).displayString(), "0.125 kg")
+        XCTAssertEqual(CulinaryQuantity.range(Decimal(string: "0.125")!, Decimal(string: "0.25")!, unit: .gram).displayString(), "0.125–0.25 g")
+        // Nothing rejects negative quantities, so they must keep their precision too.
+        XCTAssertEqual(CulinaryQuantity.exact(Decimal(string: "-1234.56")!, unit: .gram).displayString(), "-1,234.56 g")
+        XCTAssertEqual(CulinaryQuantity.exact(Decimal(string: "-0.036")!, unit: .gram).displayString(), "-0.036 g")
+    }
+
+    func testTinyAmountsNeverDisplayAsZero() {
+        let scaledDown = CulinaryQuantity.exact(0.125, unit: .teaspoon).scaled(by: Decimal(1) / 8)
+        XCTAssertEqual(scaledDown.displayString(), "0.0156 tsp")
+        XCTAssertEqual(scaledDown.converted(for: .metric).displayString(), "0.016 tsp")
+        XCTAssertEqual(scaledDown.converted(for: .imperial).displayString(), "0.016 tsp")
+        XCTAssertEqual(CulinaryQuantity.exact(Decimal(string: "0.036")!, unit: .gram).converted(for: .metric).displayString(), "0.036 g")
     }
 
     func testConvertingTwiceGivesTheSameAmount() {

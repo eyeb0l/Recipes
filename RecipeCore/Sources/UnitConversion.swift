@@ -279,8 +279,9 @@ public extension CulinaryQuantity {
         return copy
     }
 
-    /// Grams, kilograms, millilitres and litres are written as decimals ("2.5 ml"), never as vulgar fractions.
-    /// Other units use fractions where they are close ("½ tsp").
+    /// Grams, kilograms, millilitres and litres are written as decimals ("2.5 ml"), never as vulgar fractions:
+    /// kilograms and litres to the gram or millilitre, and amounts under 1 g or 1 ml to three significant figures.
+    /// Other units use fractions where they are close ("½ tsp"), and decimals for amounts too small for any fraction.
     func displayString() -> String {
         switch kind {
         case .text:
@@ -305,8 +306,13 @@ public extension CulinaryQuantity {
 
     private func formattedAmount(_ value: Decimal) -> String {
         let number = NSDecimalNumber(decimal: value).doubleValue
-        if CulinaryUnits.isMetric(unit) {
-            return number.formatted(.number.precision(.fractionLength(0...2)))
+        switch unit {
+        case .kilogram, .liter:
+            return number.formatted(.number.precision(.fractionLength(0...3)))
+        case .gram, .milliliter:
+            return Self.decimalAmount(number)
+        default:
+            break
         }
         let whole = floor(number + 0.000_001)
         let fraction = number - whole
@@ -320,7 +326,8 @@ public extension CulinaryQuantity {
         let amount: String
         if abs(nearest.0 - fraction) < 0.025 {
             if adjustedWhole == 0 {
-                amount = nearest.1.isEmpty ? "0" : nearest.1
+                // A real amount below the smallest fraction must not read as nothing.
+                amount = nearest.1.isEmpty ? (number > 0 ? Self.decimalAmount(number) : "0") : nearest.1
             } else {
                 amount = "\(Int(adjustedWhole))\(nearest.1)"
             }
@@ -328,6 +335,12 @@ public extension CulinaryQuantity {
             amount = number.formatted(.number.precision(.fractionLength(0...2)))
         }
         return amount
+    }
+
+    private static func decimalAmount(_ number: Double) -> String {
+        abs(number) < 1
+            ? number.formatted(.number.precision(.significantDigits(1...3)))
+            : number.formatted(.number.precision(.fractionLength(0...2)))
     }
 }
 
