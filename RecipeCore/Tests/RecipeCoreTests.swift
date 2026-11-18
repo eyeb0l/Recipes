@@ -637,6 +637,20 @@ final class RecipeCoreTests: XCTestCase {
         XCTAssertEqual(stage.ingredients?.first { $0.name == "milk" }?.quantity?.unit, .imperialPint)
         XCTAssertTrue(session.ingredientLines(for: stage).contains("1 UK pint milk"))
     }
+
+    func testShoppingRemindersRecogniseTheirOwnUKPintLinesAfterAUnitSwitch() {
+        // A line written in UK units must still be found once the cook switches to metric or US units.
+        for earlier in ["1 UK pint", "2 UK pints", "10 UK fl oz", "1 pint", "10 fl oz"] {
+            for amount in ["568 ml", "1.14 l", "1¼ pints", "2 cups"] {
+                XCTAssertTrue(
+                    ShoppingList.isEarlierLine("\(earlier) · Rice pudding", for: "\(amount) · Rice pudding", recipeTitle: "Rice pudding"),
+                    "\(earlier) → \(amount)"
+                )
+            }
+        }
+        XCTAssertEqual(ShoppingList.amountPattern("10 UK fl oz"), ShoppingList.amountPattern("300 ml"))
+        XCTAssertNotEqual(ShoppingList.amountPattern("1 UK pint"), ShoppingList.amountPattern("500 g"))
+    }
 }
 
 private extension XCTestCase {
