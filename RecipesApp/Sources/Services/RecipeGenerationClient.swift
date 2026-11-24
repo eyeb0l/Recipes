@@ -53,6 +53,26 @@ enum RecipeGenerationRequestBody {
     /// text the service will reject.
     static func length(of text: String) -> Int { text.utf16.count }
 
+    /// What JavaScript's `trim()` removes: Unicode spaces, tabs, line breaks and the byte order mark.
+    /// The service trims with it, so the app does too before measuring.
+    private static let trimmedCharacters = CharacterSet.whitespaces
+        .union(CharacterSet(charactersIn: "\n\u{0B}\u{0C}\r\u{2028}\u{2029}\u{FEFF}"))
+
+    static func trimmed(_ text: String) -> String { text.trimmingCharacters(in: trimmedCharacters) }
+
+    /// The saved record of how a recipe was made, in the service's format. The app writes it because
+    /// it holds every change asked for, while each request carries only the latest few.
+    static func provenanceText(request: String, feedback: [String], sources: [RecipeGenerationSource]) -> String {
+        [
+            "Created from your request:\n\(request)",
+            feedback.isEmpty ? "" : "Changes you asked for:\n" + feedback.map { "- \($0)" }.joined(separator: "\n"),
+            sources.isEmpty ? "" : "Sources consulted:\n" + sources.map { "- \($0.title.map { "\($0): " } ?? "")\($0.url.absoluteString)" }
+                .joined(separator: "\n")
+        ]
+        .filter { !$0.isEmpty }
+        .joined(separator: "\n\n")
+    }
+
     /// Builds the JSON body. The draft is encoded with the canonical encoder, so it keeps the
     /// explicit nulls the service's schema expects.
     static func data(
@@ -156,7 +176,11 @@ final class RecipeGenerationClient {
             }
             state = .idle
             let feedback = revision.map { $0.draft.feedback + [$0.feedback] } ?? []
-            return RecipeDraft(recipe: response.recipe, sources: response.sources, feedback: feedback)
+            var recipe = response.recipe
+            recipe.provenance.cleanedText = RecipeGenerationRequestBody.provenanceText(
+                request: request, feedback: feedback, sources: response.sources
+            )
+            return RecipeDraft(recipe: recipe, sources: response.sources, feedback: feedback)
         } catch {
             state = .failed(error.localizedDescription)
             throw error

@@ -282,6 +282,41 @@ final class RecipeTimelineTests: XCTestCase {
         XCTAssertEqual(revision["earlierFeedback"] as? [String], Array(history.suffix(10)))
     }
 
+    func testGenerationTextIsTrimmedTheWayTheServiceTrimsIt() {
+        // JavaScript's trim() removes a pasted byte order mark, so a lone emoji after one is too short.
+        XCTAssertEqual(RecipeGenerationRequestBody.length(of: RecipeGenerationRequestBody.trimmed("\u{FEFF}🍕")), 2)
+        XCTAssertEqual(RecipeGenerationRequestBody.trimmed(" \t\u{00A0}Soup\u{2028}\n"), "Soup")
+        // ...but keeps U+0085, which Swift's own whitespace set would strip.
+        XCTAssertEqual(RecipeGenerationRequestBody.trimmed("Soup\u{0085}"), "Soup\u{0085}")
+    }
+
+    @MainActor
+    func testASavedRecipeRecordsEveryChangeEvenPastWhatEachRequestCarries() async throws {
+        let client = RecipeGenerationClient { _, revision in
+            var recipe = revision?.draft.recipe ?? SampleRecipe.espressoBrownies
+            // The service rebuilds this from the window it was sent, which drops the oldest changes.
+            recipe.provenance = RecipeProvenance(sourceType: .generated, cleanedText: "window only")
+            return RecipeGenerationResponse(
+                requestID: "request",
+                recipe: recipe,
+                generation: .init(provider: "openai", model: "gpt-6.1-terra", schemaVersion: 1, webSearch: true),
+                sources: [RecipeGenerationSource(title: nil, url: URL(string: "https://example.com/brownies")!)]
+            )
+        }
+        let auth = AuthSession(restoring: nil, storage: .init(save: { _ in }, delete: {}))
+        var draft = try await client.generate(request: "Brownies", auth: auth, preferredUnits: .metric)
+        for change in 1...12 {
+            draft = try await client.generate(
+                request: "Brownies", revision: RecipeRevision(draft: draft, feedback: "Change \(change)"), auth: auth, preferredUnits: .metric
+            )
+        }
+        let changes = (1...12).map { "- Change \($0)" }.joined(separator: "\n")
+        XCTAssertEqual(
+            draft.recipe.provenance.cleanedText,
+            "Created from your request:\nBrownies\n\nChanges you asked for:\n\(changes)\n\nSources consulted:\n- https://example.com/brownies"
+        )
+    }
+
     func testGenerationTextIsMeasuredTheWayTheServiceMeasuresIt() {
         // The service counts JavaScript string length: UTF-16 code units, not characters.
         XCTAssertEqual(RecipeGenerationRequestBody.length(of: "🍕🍕"), 4)

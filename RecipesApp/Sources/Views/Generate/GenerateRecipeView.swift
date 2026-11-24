@@ -254,8 +254,8 @@ struct GenerateRecipeView: View {
 
     // MARK: Actions
 
-    private var trimmedRequest: String { request.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var trimmedFeedback: String { feedback.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var trimmedRequest: String { RecipeGenerationRequestBody.trimmed(request) }
+    private var trimmedFeedback: String { RecipeGenerationRequestBody.trimmed(feedback) }
     private var needsSignIn: Bool { client.requiresSignIn && !auth.isAuthenticated }
 
     private var canGenerate: Bool {
