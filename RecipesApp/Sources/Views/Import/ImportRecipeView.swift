@@ -1,4 +1,3 @@
-import AuthenticationServices
 import PhotosUI
 import RecipeCore
 import SwiftData
@@ -67,21 +66,10 @@ struct ImportRecipeView: View {
                 }
 
                 if !auth.isAuthenticated {
-                    Section("Sign in to import") {
-                        if case let .failed(message) = auth.state {
-                            Label(message, systemImage: "exclamationmark.triangle.fill")
-                                .font(.footnote)
-                                .foregroundStyle(RecipeTheme.warning)
-                        }
-                        Text("Sign in with Apple to import recipes. The app saves them to your recipe library.")
-                            .font(.footnote)
-                        SignInWithAppleButton(.continue) { _ in
-                        } onCompletion: { result in
-                            Task { await auth.handle(result: result) }
-                        }
-                        .signInWithAppleButtonStyle(.black)
-                        .frame(height: 46)
-                    }
+                    SignInWithAppleSection(
+                        title: "Sign in to import",
+                        explanation: "Sign in with Apple to import recipes. The app saves them to your recipe library."
+                    )
                 }
 
                 if let errorMessage {

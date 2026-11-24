@@ -172,6 +172,79 @@ final class RecipeTimelineUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["8 new items."].exists)
     }
 
+    func testCreatingARecipeAndSendingItBackForChangesBeforeSaving() {
+        let app = launchSampleApp()
+
+        tapToolbarButton("create-recipe", label: "Create recipe", in: app)
+        XCTAssertTrue(app.navigationBars["Create recipe"].waitForExistence(timeout: 5))
+        let create = app.buttons["generate-recipe"]
+        XCTAssertTrue(create.waitForExistence(timeout: 3))
+        XCTAssertFalse(create.isEnabled)
+        let request = app.textViews["generation-request"]
+        XCTAssertTrue(request.waitForExistence(timeout: 3))
+        request.tap()
+        request.typeText("Fudgy brownies")
+        XCTAssertTrue(create.isEnabled)
+        attachScreenshot(named: "create-recipe-request")
+        create.tap()
+
+        XCTAssertTrue(app.navigationBars["Review recipe"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["draft-title"].label, "Generated Brownies")
+        XCTAssertEqual(app.staticTexts["draft-summary"].label, "Written for: Fudgy brownies")
+        XCTAssertTrue(app.buttons["Brownie baking guide"].exists || app.links["Brownie baking guide"].exists)
+        attachScreenshot(named: "generated-recipe-draft")
+
+        let revise = app.buttons["revise-recipe"]
+        let feedback = app.textFields["revision-feedback"]
+        XCTAssertTrue(feedback.waitForExistence(timeout: 3))
+        XCTAssertFalse(revise.isEnabled)
+        feedback.tap()
+        feedback.typeText("No nuts")
+        revise.tap()
+        let revisedSummary = app.staticTexts["Changed: No nuts"]
+        XCTAssertTrue(revisedSummary.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Revision 1"].exists)
+        attachScreenshot(named: "generated-recipe-revision")
+
+        // A change that didn't work out can be undone, then asked for again differently.
+        app.buttons["undo-revision"].tap()
+        XCTAssertTrue(app.staticTexts["Written for: Fudgy brownies"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["undo-revision"].exists)
+        feedback.tap()
+        feedback.typeText("Less sugar")
+        revise.tap()
+        XCTAssertTrue(app.staticTexts["Changed: Less sugar"].waitForExistence(timeout: 10))
+
+        app.buttons["save-generated-recipe"].tap()
+        XCTAssertFalse(app.navigationBars["Review recipe"].waitForExistence(timeout: 2))
+        let startCooking = app.buttons["start-cooking"]
+        if !startCooking.waitForExistence(timeout: 3) {
+            app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Generated Brownies")).firstMatch.tap()
+        }
+        XCTAssertTrue(startCooking.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Generated Brownies"].exists)
+        XCTAssertTrue(app.staticTexts["Changed: Less sugar"].exists)
+        XCTAssertTrue(app.staticTexts["Created"].exists)
+    }
+
+    func testDiscardingAnUnsavedDraftAsksFirst() {
+        let app = launchSampleApp()
+        tapToolbarButton("create-recipe", label: "Create recipe", in: app)
+        let request = app.textViews["generation-request"]
+        XCTAssertTrue(request.waitForExistence(timeout: 5))
+        request.tap()
+        request.typeText("Soup")
+        app.buttons["generate-recipe"].tap()
+        XCTAssertTrue(app.navigationBars["Review recipe"].waitForExistence(timeout: 10))
+
+        app.navigationBars["Review recipe"].buttons["Cancel"].tap()
+        let discard = app.buttons["Discard recipe"]
+        XCTAssertTrue(discard.waitForExistence(timeout: 3))
+        discard.tap()
+        XCTAssertFalse(app.navigationBars["Review recipe"].waitForExistence(timeout: 2))
+        XCTAssertFalse(app.staticTexts["Generated Brownies"].exists)
+    }
+
     func testChoosePhotosOpensPhotoPickerInsteadOfDocumentScanner() {
         let app = launchSampleApp()
 

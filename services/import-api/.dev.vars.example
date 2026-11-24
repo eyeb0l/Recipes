@@ -5,3 +5,5 @@ OPENAI_API_KEY=sk-project-replace-me
 # Optional local overrides
 APPLE_CLIENT_ID=com.irisgiertuga.RecipeTimeline
 OPENAI_MODEL=gpt-6.1-terra
+# Set to off to write generated recipes without web search
+OPENAI_WEB_SEARCH=on

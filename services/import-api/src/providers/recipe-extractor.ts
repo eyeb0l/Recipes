@@ -32,7 +32,8 @@ export function providerSchema(): Record<string, unknown> {
   return schema;
 }
 
-export const sourceWarningInstructions = `Write uncertainty messages for the cook in plain language.
+/** How to word uncertainty messages, for imported and generated recipes alike. */
+export const plainLanguageWarningRules = `Write uncertainty messages for the cook in plain language.
 
 Each uncertainties[].message must:
 - Be one short sentence.
@@ -44,7 +45,9 @@ Each uncertainties[].message must:
 Examples:
 - The recipe doesn't say how many it serves, so the app shows 1.
 - The broth refers to a note that wasn't included.
-- The extra cooking time isn't exact.
+- The extra cooking time isn't exact.`;
+
+export const sourceWarningInstructions = `${plainLanguageWarningRules}
 
 Serving-count resolution:
 - When the source content establishes a serving count, use it, preserve its serving/yield wording in yield.label, and do not add a missing-serving uncertainty. This includes a source count of exactly 1; its label must not be null.

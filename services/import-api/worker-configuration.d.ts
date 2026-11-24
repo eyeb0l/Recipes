@@ -9,4 +9,6 @@ interface Env {
   SESSION_SIGNING_KEY: string;
   OPENAI_MODEL: string;
   OPENAI_API_KEY?: string;
+  /** Set to "off" to write generated recipes without web search. */
+  OPENAI_WEB_SEARCH?: string;
 }

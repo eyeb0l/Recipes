@@ -35,6 +35,35 @@ export interface ExtractionResult {
   model: string;
 }
 
+/** What the cook asked for, and for a revision, the draft and what to change about it. */
+export interface GenerationBrief {
+  request: string;
+  locale: string;
+  preferredUnitSystem: "source" | "metric" | "imperial";
+  revision?: {
+    recipe: Record<string, unknown>;
+    feedback: string;
+    /** Changes asked for in earlier revisions, oldest first, which should still hold. */
+    earlierFeedback: string[];
+    /** Sources found for earlier drafts, which still shaped this one. */
+    sources: GenerationSource[];
+  };
+}
+
+export interface GenerationSource {
+  title: string | null;
+  url: string;
+}
+
+export interface GenerationResult {
+  recipe: unknown;
+  provider: "openai";
+  model: string;
+  webSearch: boolean;
+  /** Web pages the model cited, without duplicates. */
+  sources: GenerationSource[];
+}
+
 export interface SessionClaims {
   sub: string;
   sid: string;

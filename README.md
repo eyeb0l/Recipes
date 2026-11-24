@@ -26,6 +26,10 @@ It's a universal app for iPhone and iPad running iOS and iPadOS 27.
 
 Recipe Timeline reads the source, works out the ingredients, stages and timings, and checks the result before saving it. If something in the original is ambiguous, it flags the uncertainty instead of guessing.
 
+### Create a recipe from a description
+
+Describe what you'd like to cook, such as a dish, what's in the fridge, a diet or how long you've got, and Recipe Timeline writes a recipe for it in your units, looking things up on the web when that helps. Review the draft, then send it back with changes as often as you like ("make it vegetarian", "for six people"), undo a change that didn't work out, and save it when it's right. The pages it consulted are listed with the recipe.
+
 ### See the whole recipe at a glance
 
 On iPad the recipe becomes an editorial timeline. Ingredients sit on the left, stages flow across the page, independent work (say, melting butter while the oven heats) runs side by side, and stages that bring things together span every ingredient they combine. On iPhone the same recipe is presented as clear, focused step cards.
@@ -62,7 +66,7 @@ Your recipe library syncs between your devices through your own private iCloud d
 
 Substitutes come from a catalogue built into the app, so looking them up sends nothing anywhere. Shopping lists are written straight to Reminders on your device, and the app asks for access the first time you add one.
 
-Cookbook photos are used only to read the recipe: they're sent for that one request and never stored in your library. The import service doesn't log or keep what you send it or the recipes it returns. See [Architecture](docs/architecture.md#data-boundaries) for the details.
+Descriptions and requested changes are sent to the recipe service only to write the recipe, and aren't kept. Cookbook photos are used only to read the recipe: they're sent for that one request and never stored in your library. The import service doesn't log or keep what you send it or the recipes it returns. See [Architecture](docs/architecture.md#data-boundaries) for the details.
 
 ## Status
 

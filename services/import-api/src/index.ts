@@ -3,8 +3,10 @@ import { authenticate, issueSession, rotateSession, verifyAppleIdentityToken } f
 import { validateCanonicalRecipe } from "./canonical";
 import { APIError, errorResponse } from "./errors";
 import type { Fetcher, HostResolver } from "./extraction/public-fetch";
+import { prepareGenerationRequest } from "./generation-request";
 import { prepareImportRequest } from "./import-request";
-import { createExtractor, type RecipeExtractor } from "./providers";
+import { createExtractor, createGenerator, type RecipeExtractor, type RecipeGenerator } from "./providers";
+import { cleanSources, generationProvenanceText } from "./providers/recipe-generator";
 import { resolveRecipeServingCount } from "./serving-resolution";
 import { adaptRecipeUnitsForClient, reconcileSystemDependentUnits } from "./unit-resolution";
 
@@ -14,6 +16,7 @@ type AppBindings = { Bindings: Env; Variables: Variables };
 export interface AppDependencies {
   verifyApple?: (token: string, audience: string) => Promise<string>;
   extractorFactory?: (env: Env) => RecipeExtractor;
+  generatorFactory?: (env: Env) => RecipeGenerator;
   fetcher?: Fetcher;
   resolver?: HostResolver;
 }
@@ -23,7 +26,14 @@ interface ImportResult {
   extraction: { provider: string; model: string; schemaVersion: number };
 }
 
+interface GenerationResponse {
+  recipe: unknown;
+  generation: { provider: string; model: string; schemaVersion: number; webSearch: boolean };
+  sources: Array<{ title: string | null; url: string }>;
+}
+
 const inFlightImports = new Map<string, Promise<ImportResult>>();
+const inFlightGenerations = new Map<string, Promise<GenerationResponse>>();
 
 export function createApp(dependencies: AppDependencies = {}) {
   const app = new Hono<AppBindings>();
@@ -91,6 +101,31 @@ export function createApp(dependencies: AppDependencies = {}) {
     return context.json({ requestID: context.get("requestID"), ...result, recipe }, 200);
   });
 
+  app.post("/v1/recipe-generations", async (context) => {
+    const claims = await authenticate(context.req.raw, context.env);
+    const quotaKey = await subjectDigest(claims.sub);
+    const quota = await context.env.IMPORT_RATE_LIMITER.limit({ key: quotaKey });
+    if (!quota.success) throw new APIError(429, "rate_limited", "Too many recipes were started at once. Try again shortly.");
+
+    // Writing or revising a recipe shares the daily allowance with imports. Invalid requests and
+    // retries that join in-flight work never reach the provider, so they don't use it.
+    const prepared = await prepareGenerationRequest(context.req.raw);
+    const dedupeKey = `${quotaKey}:${prepared.idempotencyKey}`;
+    let work = inFlightGenerations.get(dedupeKey);
+    if (!work) {
+      const env = context.env;
+      const requestID = context.get("requestID");
+      work = consumeDailyQuota(env, quotaKey)
+        .then(() => performGeneration(env, prepared.brief, requestID, dependencies.generatorFactory));
+      inFlightGenerations.set(dedupeKey, work);
+      void work.finally(() => inFlightGenerations.delete(dedupeKey)).catch(() => undefined);
+    }
+    const result = await work;
+    const recipe = structuredClone(result.recipe) as Record<string, unknown>;
+    adaptRecipeUnitsForClient(recipe, prepared.supportedUnits);
+    return context.json({ requestID: context.get("requestID"), ...result, recipe }, 200);
+  });
+
   app.notFound((context) => context.json({ error: { code: "not_found", message: "Route not found." }, requestID: context.get("requestID") }, 404));
   app.onError((error, context) => errorResponse(error, context.get("requestID") || crypto.randomUUID()));
   return app;
@@ -115,6 +150,39 @@ async function performImport(
   return {
     recipe,
     extraction: { provider: result.provider, model: result.model, schemaVersion: 1 }
+  };
+}
+
+async function performGeneration(
+  env: Env,
+  brief: Parameters<RecipeGenerator["generate"]>[0],
+  requestID: string,
+  factory: AppDependencies["generatorFactory"]
+): Promise<GenerationResponse> {
+  const generator = (factory ?? createGenerator)(env);
+  const result = await generator.generate(brief, requestID);
+  if (!result.recipe || typeof result.recipe !== "object" || Array.isArray(result.recipe)) {
+    throw new APIError(502, "invalid_model_output", "The provider returned an invalid canonical recipe.");
+  }
+  const recipe = structuredClone(result.recipe) as Record<string, unknown>;
+  // The app saves recipes by ID, so a new recipe must never reuse one already in the library,
+  // and a revision must keep its draft's ID.
+  recipe.id = brief.revision ? brief.revision.recipe.id : `generated-${crypto.randomUUID()}`;
+  reconcileSystemDependentUnits(recipe);
+  // A revision often doesn't search again, but the pages found for earlier drafts still shaped it.
+  const sources = cleanSources([...result.sources, ...brief.revision?.sources ?? []]);
+  recipe.provenance = {
+    sourceType: "generated",
+    url: null,
+    title: null,
+    cleanedText: generationProvenanceText(brief, sources),
+    importedAt: new Date().toISOString()
+  };
+  validateCanonicalRecipe(recipe);
+  return {
+    recipe,
+    generation: { provider: result.provider, model: result.model, schemaVersion: 1, webSearch: result.webSearch },
+    sources
   };
 }
 

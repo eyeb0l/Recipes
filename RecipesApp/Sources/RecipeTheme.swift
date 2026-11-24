@@ -176,6 +176,7 @@ extension RecipeSourceType {
         case .images: "Cookbook"
         case .manual: "Manual"
         case .sample: "Sample"
+        case .generated: "Created"
         }
     }
 
@@ -186,6 +187,7 @@ extension RecipeSourceType {
         case .images: "book"
         case .manual: "square.and.pencil"
         case .sample: "sparkles"
+        case .generated: "wand.and.stars"
         }
     }
 }
