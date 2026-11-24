@@ -270,8 +270,10 @@ final class RecipeTimelineTests: XCTestCase {
     }
 
     func testLongRevisionHistoriesSendOnlyTheChangesTheServiceAccepts() throws {
-        let history = (1...15).map { "Change \($0)" }
-        let draft = RecipeDraft(recipe: SampleRecipe.espressoBrownies, sources: [], feedback: history)
+        let history = (1...100).map { "Change \($0): " + String(repeating: "x", count: 1_990) }
+        var recipe = SampleRecipe.espressoBrownies
+        recipe.provenance.cleanedText = RecipeGenerationRequestBody.provenanceText(request: "Brownies", feedback: history, sources: [])
+        let draft = RecipeDraft(recipe: recipe, sources: [], feedback: history)
         let data = try RecipeGenerationRequestBody.data(
             request: "Brownies", revision: RecipeRevision(draft: draft, feedback: "Change 16"),
             locale: "en_GB", preferredUnits: .metric, idempotencyKey: "key"
@@ -280,14 +282,22 @@ final class RecipeTimelineTests: XCTestCase {
         let revision = try XCTUnwrap(body["revision"] as? [String: Any])
         // services/import-api rejects more than 10 earlier changes; the draft already includes the rest.
         XCTAssertEqual(revision["earlierFeedback"] as? [String], Array(history.suffix(10)))
+        // The full history stays in the saved recipe, not in the draft sent back, which the service
+        // caps at 200,000 characters.
+        let sent = try XCTUnwrap(revision["recipe"] as? [String: Any])
+        XCTAssertTrue((sent["provenance"] as? [String: Any])?["cleanedText"] is NSNull)
+        XCTAssertLessThan(try JSONSerialization.data(withJSONObject: sent).count, 200_000)
+        XCTAssertEqual(draft.recipe.provenance.cleanedText?.contains("Change 1: "), true)
     }
 
     func testGenerationTextIsTrimmedTheWayTheServiceTrimsIt() {
         // JavaScript's trim() removes a pasted byte order mark, so a lone emoji after one is too short.
         XCTAssertEqual(RecipeGenerationRequestBody.length(of: RecipeGenerationRequestBody.trimmed("\u{FEFF}🍕")), 2)
         XCTAssertEqual(RecipeGenerationRequestBody.trimmed(" \t\u{00A0}Soup\u{2028}\n"), "Soup")
-        // ...but keeps U+0085, which Swift's own whitespace set would strip.
+        // ...but keeps U+0085 and U+200B, which Foundation's whitespace sets strip.
         XCTAssertEqual(RecipeGenerationRequestBody.trimmed("Soup\u{0085}"), "Soup\u{0085}")
+        XCTAssertEqual(RecipeGenerationRequestBody.length(of: RecipeGenerationRequestBody.trimmed("\u{200B}🍕")), 3)
+        XCTAssertEqual(RecipeGenerationRequestBody.trimmed("\u{3000}\u{1680}Soup\u{202F}\u{205F}"), "Soup")
     }
 
     @MainActor

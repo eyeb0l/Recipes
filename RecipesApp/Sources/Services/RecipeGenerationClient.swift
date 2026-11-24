@@ -53,10 +53,13 @@ enum RecipeGenerationRequestBody {
     /// text the service will reject.
     static func length(of text: String) -> Int { text.utf16.count }
 
-    /// What JavaScript's `trim()` removes: Unicode spaces, tabs, line breaks and the byte order mark.
-    /// The service trims with it, so the app does too before measuring.
-    private static let trimmedCharacters = CharacterSet.whitespaces
-        .union(CharacterSet(charactersIn: "\n\u{0B}\u{0C}\r\u{2028}\u{2029}\u{FEFF}"))
+    /// Exactly what JavaScript's `trim()` removes (ECMAScript WhiteSpace and LineTerminator). The service
+    /// trims with it, so the app does too before measuring. Foundation's own sets differ: they add
+    /// U+0085 and U+200B and leave out U+FEFF.
+    private static let trimmedCharacters = CharacterSet(
+        charactersIn: "\t\u{0B}\u{0C} \u{00A0}\u{1680}\u{2000}\u{2001}\u{2002}\u{2003}\u{2004}\u{2005}\u{2006}\u{2007}"
+            + "\u{2008}\u{2009}\u{200A}\u{202F}\u{205F}\u{3000}\u{FEFF}\n\r\u{2028}\u{2029}"
+    )
 
     static func trimmed(_ text: String) -> String { text.trimmingCharacters(in: trimmedCharacters) }
 
@@ -90,8 +93,12 @@ enum RecipeGenerationRequestBody {
             "supportedUnits": UnitID.allCases.map(\.rawValue)
         ]
         if let revision {
+            // The saved history of every change can outgrow what the service accepts, and the latest
+            // changes already travel in `earlierFeedback`, so the draft goes without it.
+            var recipe = revision.draft.recipe
+            recipe.provenance.cleanedText = nil
             body["revision"] = [
-                "recipe": try JSONSerialization.jsonObject(with: RecipeCoding.encoder.encode(revision.draft.recipe)),
+                "recipe": try JSONSerialization.jsonObject(with: RecipeCoding.encoder.encode(recipe)),
                 "feedback": revision.feedback,
                 "earlierFeedback": Array(revision.draft.feedback.suffix(maximumEarlierFeedback)),
                 "sources": revision.draft.sources.map { source -> [String: Any] in
