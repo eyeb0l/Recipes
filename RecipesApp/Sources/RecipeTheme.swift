@@ -176,6 +176,7 @@ extension RecipeSourceType {
         case .images: "Cookbook"
         case .manual: "Manual"
         case .sample: "Sample"
+        case .generated: "Created"
         }
     }
 
@@ -186,6 +187,7 @@ extension RecipeSourceType {
         case .images: "book"
         case .manual: "square.and.pencil"
         case .sample: "sparkles"
+        case .generated: "wand.and.stars"
         }
     }
 }
@@ -197,6 +199,8 @@ enum AppPreferenceKey {
     static let lastCloudSync = "lastCloudSyncDate"
     /// The Reminders list a shopping list was last added to.
     static let shoppingReminderList = "shoppingReminderListID"
+    /// Whether the user has agreed to send recipe requests to OpenAI.
+    static let generationNoticeAccepted = "generationNoticeAccepted"
 }
 
 /// Lays out children left to right, wrapping to a new line when the next child would not fit.

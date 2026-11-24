@@ -230,6 +230,182 @@ final class RecipeTimelineTests: XCTestCase {
         XCTAssertEqual(Set(units), Set(UnitID.allCases.map(\.rawValue)))
     }
 
+    func testRecipeRevisionsSendTheDraftWithExplicitNullsAndEverythingAskedSoFar() throws {
+        var recipe = SampleRecipe.espressoBrownies
+        recipe.summary = nil
+        let draft = RecipeDraft(
+            recipe: recipe,
+            sources: [
+                RecipeGenerationSource(title: nil, url: URL(string: "https://example.com/brownies")!),
+                RecipeGenerationSource(title: "Guide", url: URL(string: "https://example.org/guide")!)
+            ],
+            feedback: ["Less sugar"]
+        )
+        let data = try RecipeGenerationRequestBody.data(
+            request: "Fudgy brownies",
+            revision: RecipeRevision(draft: draft, feedback: "No nuts"),
+            locale: "en_GB",
+            preferredUnits: .metric,
+            idempotencyKey: "key"
+        )
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(body["request"] as? String, "Fudgy brownies")
+        XCTAssertEqual(body["preferredUnitSystem"] as? String, "metric")
+        XCTAssertEqual(Set(try XCTUnwrap(body["supportedUnits"] as? [String])), Set(UnitID.allCases.map(\.rawValue)))
+        let revision = try XCTUnwrap(body["revision"] as? [String: Any])
+        XCTAssertEqual(revision["feedback"] as? String, "No nuts")
+        XCTAssertEqual(revision["earlierFeedback"] as? [String], ["Less sugar"])
+        let sources = try XCTUnwrap(revision["sources"] as? [[String: Any]])
+        XCTAssertTrue(sources[0]["title"] is NSNull)
+        XCTAssertEqual(sources[1]["url"] as? String, "https://example.org/guide")
+        // The service's RecipeV1 schema requires optional fields to be present as null.
+        let sent = try XCTUnwrap(revision["recipe"] as? [String: Any])
+        XCTAssertTrue(sent["summary"] is NSNull)
+        XCTAssertEqual(sent["id"] as? String, recipe.id)
+
+        let fresh = try XCTUnwrap(JSONSerialization.jsonObject(with: RecipeGenerationRequestBody.data(
+            request: "Soup", revision: nil, locale: "en_GB", preferredUnits: .source, idempotencyKey: "key"
+        )) as? [String: Any])
+        XCTAssertNil(fresh["revision"])
+    }
+
+    func testLongRevisionHistoriesSendOnlyTheChangesTheServiceAccepts() throws {
+        let history = (1...100).map { "Change \($0): " + String(repeating: "x", count: 1_990) }
+        var recipe = SampleRecipe.espressoBrownies
+        recipe.provenance.cleanedText = RecipeGenerationRequestBody.provenanceText(request: "Brownies", feedback: history, sources: [])
+        let draft = RecipeDraft(recipe: recipe, sources: [], feedback: history)
+        let data = try RecipeGenerationRequestBody.data(
+            request: "Brownies", revision: RecipeRevision(draft: draft, feedback: "Change 16"),
+            locale: "en_GB", preferredUnits: .metric, idempotencyKey: "key"
+        )
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let revision = try XCTUnwrap(body["revision"] as? [String: Any])
+        // services/import-api rejects more than 10 earlier changes; the draft already includes the rest.
+        XCTAssertEqual(revision["earlierFeedback"] as? [String], Array(history.suffix(10)))
+        // The full history stays in the saved recipe, not in the draft sent back, which the service
+        // caps at 200,000 characters.
+        let sent = try XCTUnwrap(revision["recipe"] as? [String: Any])
+        XCTAssertTrue((sent["provenance"] as? [String: Any])?["cleanedText"] is NSNull)
+        XCTAssertLessThan(try JSONSerialization.data(withJSONObject: sent).count, 200_000)
+        XCTAssertEqual(draft.recipe.provenance.cleanedText?.contains("Change 1: "), true)
+    }
+
+    func testGenerationTextIsTrimmedTheWayTheServiceTrimsIt() {
+        // JavaScript's trim() removes a pasted byte order mark, so a lone emoji after one is too short.
+        XCTAssertEqual(RecipeGenerationRequestBody.length(of: RecipeGenerationRequestBody.trimmed("\u{FEFF}🍕")), 2)
+        XCTAssertEqual(RecipeGenerationRequestBody.trimmed(" \t\u{00A0}Soup\u{2028}\n"), "Soup")
+        // ...but keeps U+0085 and U+200B, which Foundation's whitespace sets strip.
+        XCTAssertEqual(RecipeGenerationRequestBody.trimmed("Soup\u{0085}"), "Soup\u{0085}")
+        XCTAssertEqual(RecipeGenerationRequestBody.length(of: RecipeGenerationRequestBody.trimmed("\u{200B}🍕")), 3)
+        XCTAssertEqual(RecipeGenerationRequestBody.trimmed("\u{3000}\u{1680}Soup\u{202F}\u{205F}"), "Soup")
+    }
+
+    @MainActor
+    func testASavedRecipeRecordsEveryChangeEvenPastWhatEachRequestCarries() async throws {
+        let client = RecipeGenerationClient { _, revision in
+            var recipe = revision?.draft.recipe ?? SampleRecipe.espressoBrownies
+            // The service rebuilds this from the window it was sent, which drops the oldest changes.
+            recipe.provenance = RecipeProvenance(sourceType: .generated, cleanedText: "window only")
+            return RecipeGenerationResponse(
+                requestID: "request",
+                recipe: recipe,
+                generation: .init(provider: "openai", model: "gpt-6.1-terra", schemaVersion: 1, webSearch: true),
+                sources: [RecipeGenerationSource(title: nil, url: URL(string: "https://example.com/brownies")!)]
+            )
+        }
+        let auth = AuthSession(restoring: nil, storage: .init(save: { _ in }, delete: {}))
+        var draft = try await client.generate(request: "Brownies", auth: auth, preferredUnits: .metric)
+        for change in 1...12 {
+            draft = try await client.generate(
+                request: "Brownies", revision: RecipeRevision(draft: draft, feedback: "Change \(change)"), auth: auth, preferredUnits: .metric
+            )
+        }
+        let changes = (1...12).map { "- Change \($0)" }.joined(separator: "\n")
+        XCTAssertEqual(
+            draft.recipe.provenance.cleanedText,
+            "Created from your request:\nBrownies\n\nChanges you asked for:\n\(changes)\n\nSources consulted:\n- https://example.com/brownies"
+        )
+    }
+
+    func testGenerationTextIsMeasuredTheWayTheServiceMeasuresIt() {
+        // The service counts JavaScript string length: UTF-16 code units, not characters.
+        XCTAssertEqual(RecipeGenerationRequestBody.length(of: "🍕🍕"), 4)
+        XCTAssertEqual(RecipeGenerationRequestBody.length(of: "cafe\u{301}"), 5)
+        XCTAssertEqual(RecipeGenerationRequestBody.length(of: String(repeating: "🍕", count: 1_000)), 2_000)
+    }
+
+    func testRecipeGenerationResponsesDecodeSourcesWithoutTitles() throws {
+        let recipe = try XCTUnwrap(JSONSerialization.jsonObject(with: RecipeCoding.encoder.encode(SampleRecipe.espressoBrownies)))
+        let payload: [String: Any] = [
+            "requestID": "request",
+            "recipe": recipe,
+            "generation": ["provider": "openai", "model": "gpt-6.1-terra", "schemaVersion": 1, "webSearch": true],
+            "sources": [["title": NSNull(), "url": "https://www.example.com/brownies"], ["title": "Guide", "url": "https://example.org/guide"]]
+        ]
+        let response = try RecipeCoding.decoder.decode(
+            RecipeGenerationResponse.self,
+            from: JSONSerialization.data(withJSONObject: payload)
+        )
+        XCTAssertEqual(response.recipe.id, SampleRecipe.espressoBrownies.id)
+        XCTAssertTrue(response.generation.webSearch)
+        XCTAssertEqual(response.sources.map(\.displayName), ["example.com", "Guide"])
+    }
+
+    @MainActor
+    func testEachRevisionRemembersTheChangesAskedForBeforeIt() async throws {
+        let received = RevisionLog()
+        let client = RecipeGenerationClient { request, revision in
+            await received.record(revision?.draft.feedback, revision?.feedback)
+            var recipe = revision?.draft.recipe ?? SampleRecipe.espressoBrownies
+            recipe.summary = revision?.feedback ?? request
+            return RecipeGenerationResponse(
+                requestID: "request",
+                recipe: recipe,
+                generation: .init(provider: "openai", model: "gpt-6.1-terra", schemaVersion: 1, webSearch: true),
+                sources: []
+            )
+        }
+        let auth = AuthSession(restoring: nil, storage: .init(save: { _ in }, delete: {}))
+
+        let first = try await client.generate(request: "Brownies", auth: auth, preferredUnits: .metric)
+        XCTAssertEqual(first.feedback, [])
+        let second = try await client.generate(
+            request: "Brownies", revision: RecipeRevision(draft: first, feedback: "Less sugar"), auth: auth, preferredUnits: .metric
+        )
+        let third = try await client.generate(
+            request: "Brownies", revision: RecipeRevision(draft: second, feedback: "No nuts"), auth: auth, preferredUnits: .metric
+        )
+
+        XCTAssertEqual(third.feedback, ["Less sugar", "No nuts"])
+        XCTAssertEqual(third.recipe.summary, "No nuts")
+        let calls = await received.calls
+        XCTAssertEqual(calls.map(\.earlier), [nil, [], ["Less sugar"]])
+        XCTAssertEqual(calls.map(\.feedback), [nil, "Less sugar", "No nuts"])
+        XCTAssertEqual(client.state, .idle)
+    }
+
+    @MainActor
+    func testAGeneratedRecipeThatFailsValidationIsNotReturned() async throws {
+        let client = RecipeGenerationClient { _, _ in
+            var recipe = SampleRecipe.espressoBrownies
+            recipe.title = " "
+            return RecipeGenerationResponse(
+                requestID: "request",
+                recipe: recipe,
+                generation: .init(provider: "openai", model: "gpt-6.1-terra", schemaVersion: 1, webSearch: false),
+                sources: []
+            )
+        }
+        let auth = AuthSession(restoring: nil, storage: .init(save: { _ in }, delete: {}))
+        do {
+            _ = try await client.generate(request: "Brownies", auth: auth, preferredUnits: .metric)
+            XCTFail("An invalid recipe must not become a draft")
+        } catch let APIClientError.rejected(status, _) {
+            XCTAssertEqual(status, 422)
+        }
+        guard case .failed = client.state else { return XCTFail("The client should report the failure") }
+    }
+
     @MainActor
     func testConcurrentTokenRefreshesShareOneRotatingRequest() async throws {
         StubSessionProtocol.reset(status: 200, body: try Self.tokenBody(access: "fresh-access", refresh: "fresh-refresh"), delay: 0.2)
@@ -484,6 +660,19 @@ final class RecipeTimelineTests: XCTestCase {
             "accessExpiresAt": formatter.string(from: Date().addingTimeInterval(900)),
             "refreshExpiresAt": formatter.string(from: Date().addingTimeInterval(86_400))
         ])
+    }
+}
+
+private actor RevisionLog {
+    struct Call: Equatable {
+        let earlier: [String]?
+        let feedback: String?
+    }
+
+    private(set) var calls: [Call] = []
+
+    func record(_ earlier: [String]?, _ feedback: String?) {
+        calls.append(.init(earlier: earlier, feedback: feedback))
     }
 }
 

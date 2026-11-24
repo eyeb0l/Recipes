@@ -35,9 +35,11 @@
 		860D350BE25A12363AF9A8A4 /* CookModeHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 743FBD89B61C0934E9F9ED4F /* CookModeHost.swift */; };
 		87A4A82C567F673B93018595 /* RecipeCookActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B05261EA830099372BAEDB71 /* RecipeCookActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		87DBCA332E17E483ACBEA722 /* SampleRecipe.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD4E81C14025A19977F38BDD /* SampleRecipe.swift */; };
+		8ABBDF3B407A07568F2E2E69 /* GenerateRecipeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 177F8D4FF4F115DAF581A325 /* GenerateRecipeView.swift */; };
 		8B133D973FAA84E1D0EC1DD9 /* RecipeModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13821CEDAE9B4DAAC2602068 /* RecipeModels.swift */; };
 		98FD9CFB2C57CF5432BD9B01 /* RecipeCookActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E58D3E1AF3E56432B77F78D /* RecipeCookActivityWidget.swift */; };
 		9BA37E821A4D70E05FE1B002 /* IngredientSubstitutesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A68D5C5A99288990BE86BABA /* IngredientSubstitutesView.swift */; };
+		9C05D3949F6147DC604FD50F /* RecipeGenerationClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5586E1AE883CF556B4B9CDC /* RecipeGenerationClient.swift */; };
 		A32A263BDF89A234AE59138F /* DocumentCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7714C3D31923C367FCC3BDA8 /* DocumentCapture.swift */; };
 		A97F99B886A903357D6B906E /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CABF88FCE8577C828C85610D /* KeychainStore.swift */; };
 		AA1347DA89412F8805BBE0F9 /* RecipeTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D829F7ABD442D9CCD4EB746 /* RecipeTheme.swift */; };
@@ -49,6 +51,7 @@
 		D710EB822F05C29B2FF49572 /* RecipeExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E75BE439CD3925292F74A8F /* RecipeExportView.swift */; };
 		D732C25F0EC6D560D7B165A5 /* UnitConversion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38D263C0D62D6E20D71C4320 /* UnitConversion.swift */; };
 		DB1A506D32EF7B9A7E6B9288 /* RecipeCookActivityBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC53FC69779A13583D36DED1 /* RecipeCookActivityBundle.swift */; };
+		DB261DC9E62F4518AFC90722 /* SignInWithAppleSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3354315248DED049416A9FF /* SignInWithAppleSection.swift */; };
 		DC13CC62F551A77D3E9A151C /* APIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE01EB8A29DA6126A0D369EA /* APIConfiguration.swift */; };
 		DF3FCAADE5DB6FDF2870516F /* FocusedStepList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 557401C5B6EE90282FB8F536 /* FocusedStepList.swift */; };
 		DFC34C7804C82EB90D65C743 /* RecipeTimelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DEAE787FA761E745F5A42A2 /* RecipeTimelineTests.swift */; };
@@ -146,6 +149,7 @@
 		13821CEDAE9B4DAAC2602068 /* RecipeModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeModels.swift; sourceTree = "<group>"; };
 		14719DDBB6A138BA9B02E65A /* ImportRecipeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportRecipeView.swift; sourceTree = "<group>"; };
 		167E3BE2DE8B4ABE5019630D /* RecipeImportClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeImportClient.swift; sourceTree = "<group>"; };
+		177F8D4FF4F115DAF581A325 /* GenerateRecipeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerateRecipeView.swift; sourceTree = "<group>"; };
 		228C4B4A6FAB4B68CB511593 /* RecipeValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeValidator.swift; sourceTree = "<group>"; };
 		2D829F7ABD442D9CCD4EB746 /* RecipeTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeTheme.swift; sourceTree = "<group>"; };
 		2DEAE787FA761E745F5A42A2 /* RecipeTimelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeTimelineTests.swift; sourceTree = "<group>"; };
@@ -181,6 +185,7 @@
 		AE1335BFB52C99A161C55AC4 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B05261EA830099372BAEDB71 /* RecipeCookActivity.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = RecipeCookActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		BC53FC69779A13583D36DED1 /* RecipeCookActivityBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeCookActivityBundle.swift; sourceTree = "<group>"; };
+		C5586E1AE883CF556B4B9CDC /* RecipeGenerationClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeGenerationClient.swift; sourceTree = "<group>"; };
 		CABF88FCE8577C828C85610D /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		D306D0DA34B2D474325C347D /* RecipeEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeEditorView.swift; sourceTree = "<group>"; };
 		D4BC9730142766D1022538AB /* RecipeTimelineUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RecipeTimelineUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -188,6 +193,7 @@
 		DA4DE2A16AAB138F43A264EF /* ShoppingList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingList.swift; sourceTree = "<group>"; };
 		DB76BEBA1EB9F1AE71ACE481 /* RecipeTimelineApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeTimelineApp.swift; sourceTree = "<group>"; };
 		E26A8D447102BE5229367782 /* AppRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouter.swift; sourceTree = "<group>"; };
+		E3354315248DED049416A9FF /* SignInWithAppleSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInWithAppleSection.swift; sourceTree = "<group>"; };
 		E89C9F0B39EEACF47F2017A2 /* AuthSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthSession.swift; sourceTree = "<group>"; };
 		E8AEFB118B3577BD75D51B02 /* RecipeCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = RecipeCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		EE01EB8A29DA6126A0D369EA /* APIConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfiguration.swift; sourceTree = "<group>"; };
@@ -238,9 +244,11 @@
 				628CD9309569C0E8AE5C8DC2 /* AppRootView.swift */,
 				5206E6765E5E17D054F58567 /* RecipeDetailView.swift */,
 				AE1335BFB52C99A161C55AC4 /* SettingsView.swift */,
+				E3354315248DED049416A9FF /* SignInWithAppleSection.swift */,
 				356BB7AB5958FE7138A3A902 /* Cook */,
 				40E1555D303FBBCA2EB087FF /* Editor */,
 				69A4124C76D9D36726AD0913 /* Export */,
+				3557BA720C67DD4D7286E58E /* Generate */,
 				D1AF38B39350D0F13592E280 /* Import */,
 				969DDA5597C147A9323594C8 /* Shopping */,
 				D7830F638E24578F45F4811A /* Substitutes */,
@@ -265,6 +273,14 @@
 				3E58D3E1AF3E56432B77F78D /* RecipeCookActivityWidget.swift */,
 			);
 			path = Sources;
+			sourceTree = "<group>";
+		};
+		3557BA720C67DD4D7286E58E /* Generate */ = {
+			isa = PBXGroup;
+			children = (
+				177F8D4FF4F115DAF581A325 /* GenerateRecipeView.swift */,
+			);
+			path = Generate;
 			sourceTree = "<group>";
 		};
 		356BB7AB5958FE7138A3A902 /* Cook */ = {
@@ -380,6 +396,7 @@
 				7714C3D31923C367FCC3BDA8 /* DocumentCapture.swift */,
 				CABF88FCE8577C828C85610D /* KeychainStore.swift */,
 				F1463B16F644A65D08413000 /* RecipeExporter.swift */,
+				C5586E1AE883CF556B4B9CDC /* RecipeGenerationClient.swift */,
 				167E3BE2DE8B4ABE5019630D /* RecipeImportClient.swift */,
 				A914201DFD693A86888BC51D /* ShoppingReminders.swift */,
 			);
@@ -677,6 +694,7 @@
 				4F56B98060EFFEDA593ACEEB /* CookModeView.swift in Sources */,
 				A32A263BDF89A234AE59138F /* DocumentCapture.swift in Sources */,
 				DF3FCAADE5DB6FDF2870516F /* FocusedStepList.swift in Sources */,
+				8ABBDF3B407A07568F2E2E69 /* GenerateRecipeView.swift in Sources */,
 				B5378F555967C881B8C152CA /* ImportRecipeView.swift in Sources */,
 				9BA37E821A4D70E05FE1B002 /* IngredientSubstitutesView.swift in Sources */,
 				A97F99B886A903357D6B906E /* KeychainStore.swift in Sources */,
@@ -685,6 +703,7 @@
 				CC6A78D9B2B4FD0B4BC26EDD /* RecipeEditorView.swift in Sources */,
 				D710EB822F05C29B2FF49572 /* RecipeExportView.swift in Sources */,
 				7A8D5FBC59727A9097C51356 /* RecipeExporter.swift in Sources */,
+				9C05D3949F6147DC604FD50F /* RecipeGenerationClient.swift in Sources */,
 				0B291595FF7BDD1138073F81 /* RecipeImportClient.swift in Sources */,
 				10A4E42594FA16841FEF1CBD /* RecipeRecord.swift in Sources */,
 				AA1347DA89412F8805BBE0F9 /* RecipeTheme.swift in Sources */,
@@ -692,6 +711,7 @@
 				D5FCAA889216B12353F1BDA7 /* SettingsView.swift in Sources */,
 				1413A8550A34CDE299BE3E5D /* ShoppingListView.swift in Sources */,
 				E0BA4924F5133408C1AA360B /* ShoppingReminders.swift in Sources */,
+				DB261DC9E62F4518AFC90722 /* SignInWithAppleSection.swift in Sources */,
 				50DD54F6F8FFA2F4B2830FFD /* TimelineGridView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -28,10 +28,16 @@ A stage is ready when it is incomplete and all dependency IDs are complete. Mult
 
 `ShoppingList` turns a recipe into items to buy at the chosen servings, combining ingredients with the same name and adding up their amounts when the units allow. `ShoppingList.plan` merges those items into a Reminders list without duplicates: each item is a reminder titled with the ingredient, so Reminders' grocery lists can sort it into sections, and the amount and recipe go on their own line in its notes. An incomplete reminder with the same name is reused, and adding a recipe again replaces its line instead of adding another. The app writes the plan through `ShoppingReminderStore`, backed by EventKit, with an in-memory store for tests and `--ui-testing` launches.
 
+## Generated recipes
+
+The import service can also write a recipe from a description, using web search, and revise it at the cook's feedback. Drafts live only in the create sheet until the cook saves one: each revision sends the current draft, the feedback, and the earlier feedback and sources back to the stateless Worker, which returns a whole new draft. The sheet keeps earlier drafts so a change can be undone. A saved recipe has the `generated` source type, and its source text records the request, the changes asked for and the pages consulted.
+
+`generated` is a new `RecipeSourceType` within schema version 1, like the UK units, so a generated recipe synced through iCloud won't open on a build that predates it until that device updates.
+
 ## Import trust boundary
 
 The app never contains provider secrets. It authenticates to the Worker with Sign in with Apple, then submits one normalized source. URL fetching and provider invocation occur only in the Worker. The model returns canonical data; the backend and app independently validate graph references and cycles before deterministic rendering.
 
 ## Data boundaries
 
-Canonical recipes and cleaned source text are stored by the app. Cookbook images are normalized on device, uploaded only for the extraction request, and never inserted into SwiftData. Active cooking state is stored separately in the App Group so Live Activity intents do not write cook progress into CloudKit. Shopping lists go to Reminders on the device through EventKit, with full Reminders access because the app reads the chosen list to avoid duplicates. Substitution lookups never leave the device. The Worker stores only opaque session material, token hashes, and quota counters; request bodies and canonical results are not logged or retained.
+Canonical recipes and cleaned source text are stored by the app. Cookbook images are normalized on device, uploaded only for the extraction request, and never inserted into SwiftData. Active cooking state is stored separately in the App Group so Live Activity intents do not write cook progress into CloudKit. Shopping lists go to Reminders on the device through EventKit, with full Reminders access because the app reads the chosen list to avoid duplicates. Substitution lookups never leave the device. Recipe requests, feedback and drafts go through the Worker to OpenAI (with `store: false`) only for the generation call, and the Worker neither logs nor keeps them. The app explains this and asks for agreement before the first request, and saves the request and changes with the recipe. The Worker stores only opaque session material, token hashes, and quota counters; request bodies and canonical results are not logged or retained.

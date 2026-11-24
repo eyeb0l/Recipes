@@ -198,7 +198,7 @@
       "additionalProperties": false,
       "required": ["sourceType", "url", "title", "cleanedText", "importedAt"],
       "properties": {
-        "sourceType": { "type": "string", "enum": ["url", "text", "images", "manual", "sample"] },
+        "sourceType": { "type": "string", "enum": ["url", "text", "images", "manual", "sample", "generated"] },
         "url": { "type": ["string", "null"] },
         "title": { "type": ["string", "null"] },
         "cleanedText": { "type": ["string", "null"] },

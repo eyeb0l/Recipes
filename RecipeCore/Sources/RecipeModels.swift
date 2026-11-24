@@ -379,6 +379,8 @@ public enum RecipeSourceType: String, Codable, CaseIterable, Sendable {
     case images
     case manual
     case sample
+    /// Written by the recipe generator from the cook's request, and revised at their feedback.
+    case generated
 }
 
 public struct RecipeProvenance: Codable, Hashable, Sendable {

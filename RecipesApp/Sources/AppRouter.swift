@@ -20,6 +20,7 @@ final class AppRouter {
 
 enum AppSheet: String, Identifiable {
     case importRecipe
+    case generateRecipe
     case settings
 
     var id: String { rawValue }

@@ -40,7 +40,10 @@ struct AppRootView: View {
                 RecipeDetailView(record: selected)
                     .id(selected.id)
             } else {
-                EmptyLibraryDetail(onImport: { router.presentedSheet = .importRecipe })
+                EmptyLibraryDetail(
+                    onImport: { router.presentedSheet = .importRecipe },
+                    onCreate: { router.presentedSheet = .generateRecipe }
+                )
             }
         }
         .navigationSplitViewStyle(.balanced)
@@ -55,6 +58,8 @@ struct AppRootView: View {
             switch sheet {
             case .importRecipe:
                 ImportRecipeView()
+            case .generateRecipe:
+                GenerateRecipeView()
             case .settings:
                 SettingsView(persistence: persistence)
             }
@@ -96,6 +101,10 @@ struct AppRootView: View {
         ToolbarItem(placement: .topBarPinnedTrailing) {
             Button("Import", systemImage: "plus") { router.presentedSheet = .importRecipe }
                 .accessibilityIdentifier("import-recipe")
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            Button("Create recipe", systemImage: "wand.and.stars") { router.presentedSheet = .generateRecipe }
+                .accessibilityIdentifier("create-recipe")
         }
         ToolbarItem(placement: .topBarLeading) {
             Button("Settings", systemImage: "gearshape") { router.presentedSheet = .settings }
@@ -223,10 +232,12 @@ private struct RecipeLibrary: View {
         ContentUnavailableView {
             Label("Your cookbook is empty", systemImage: "book.closed")
         } description: {
-            Text("Import from a link, paste a recipe, scan a cookbook page, or try the sample recipe.")
+            Text("Import from a link, paste a recipe, scan a cookbook page, describe one to create, or try the sample recipe.")
         } actions: {
             Button("Import recipe") { router.presentedSheet = .importRecipe }
                 .primaryGlassButton()
+            Button("Create recipe") { router.presentedSheet = .generateRecipe }
+                .buttonStyle(.glass)
             Button("Add sample") { addSample() }
                 .buttonStyle(.glass)
         }
@@ -380,6 +391,7 @@ private struct RecipeLibraryRow: View {
 
 private struct EmptyLibraryDetail: View {
     let onImport: () -> Void
+    let onCreate: () -> Void
     @ScaledMetric(relativeTo: .largeTitle) private var illustrationSize = 68
     @ScaledMetric(relativeTo: .body) private var contentSpacing = 24
 
@@ -404,10 +416,11 @@ private struct EmptyLibraryDetail: View {
                             .accessibilitySortPriority(2)
                     }
 
-                    Button("Import recipe", action: onImport)
-                        .primaryGlassButton()
-                        .controlSize(.large)
-                        .accessibilitySortPriority(1)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 12) { detailActions }
+                        VStack(spacing: 12) { detailActions }
+                    }
+                    .accessibilitySortPriority(1)
                 }
                 .frame(maxWidth: 680)
                 .padding(40)
@@ -417,5 +430,15 @@ private struct EmptyLibraryDetail: View {
         }
         .background(RecipeTheme.paper.ignoresSafeArea())
         .accessibilityIdentifier("empty-library-detail")
+    }
+
+    @ViewBuilder
+    private var detailActions: some View {
+        Button("Import recipe", action: onImport)
+            .primaryGlassButton()
+            .controlSize(.large)
+        Button("Create recipe", action: onCreate)
+            .buttonStyle(.glass)
+            .controlSize(.large)
     }
 }
