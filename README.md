@@ -66,7 +66,7 @@ Your recipe library syncs between your devices through your own private iCloud d
 
 Substitutes come from a catalogue built into the app, so looking them up sends nothing anywhere. Shopping lists are written straight to Reminders on your device, and the app asks for access the first time you add one.
 
-Descriptions and requested changes are sent to the recipe service only to write the recipe, and aren't kept. Cookbook photos are used only to read the recipe: they're sent for that one request and never stored in your library. The import service doesn't log or keep what you send it or the recipes it returns. See [Architecture](docs/architecture.md#data-boundaries) for the details.
+To create a recipe, what you describe and any changes you ask for are sent through the import service to OpenAI, which writes it; the app asks before sending the first one. They're saved with the recipe in your library, and the import service doesn't keep them. Cookbook photos are used only to read the recipe: they're sent for that one request and never stored in your library. The import service doesn't log or keep what you send it or the recipes it returns. See [Architecture](docs/architecture.md#data-boundaries) for the details.
 
 ## Status
 

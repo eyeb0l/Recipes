@@ -269,6 +269,26 @@ final class RecipeTimelineTests: XCTestCase {
         XCTAssertNil(fresh["revision"])
     }
 
+    func testLongRevisionHistoriesSendOnlyTheChangesTheServiceAccepts() throws {
+        let history = (1...15).map { "Change \($0)" }
+        let draft = RecipeDraft(recipe: SampleRecipe.espressoBrownies, sources: [], feedback: history)
+        let data = try RecipeGenerationRequestBody.data(
+            request: "Brownies", revision: RecipeRevision(draft: draft, feedback: "Change 16"),
+            locale: "en_GB", preferredUnits: .metric, idempotencyKey: "key"
+        )
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let revision = try XCTUnwrap(body["revision"] as? [String: Any])
+        // services/import-api rejects more than 10 earlier changes; the draft already includes the rest.
+        XCTAssertEqual(revision["earlierFeedback"] as? [String], Array(history.suffix(10)))
+    }
+
+    func testGenerationTextIsMeasuredTheWayTheServiceMeasuresIt() {
+        // The service counts JavaScript string length: UTF-16 code units, not characters.
+        XCTAssertEqual(RecipeGenerationRequestBody.length(of: "🍕🍕"), 4)
+        XCTAssertEqual(RecipeGenerationRequestBody.length(of: "cafe\u{301}"), 5)
+        XCTAssertEqual(RecipeGenerationRequestBody.length(of: String(repeating: "🍕", count: 1_000)), 2_000)
+    }
+
     func testRecipeGenerationResponsesDecodeSourcesWithoutTitles() throws {
         let recipe = try XCTUnwrap(JSONSerialization.jsonObject(with: RecipeCoding.encoder.encode(SampleRecipe.espressoBrownies)))
         let payload: [String: Any] = [

@@ -45,6 +45,13 @@ enum RecipeGenerationRequestBody {
     /// The service rejects requests shorter than this.
     static let minimumRequestLength = 3
     static let maximumTextLength = 2_000
+    /// The service accepts this many earlier changes. Each draft already includes them, so older ones
+    /// only remind the model what to keep.
+    static let maximumEarlierFeedback = 10
+
+    /// Text length as the service counts it, in UTF-16 code units, so the app never offers to send
+    /// text the service will reject.
+    static func length(of text: String) -> Int { text.utf16.count }
 
     /// Builds the JSON body. The draft is encoded with the canonical encoder, so it keeps the
     /// explicit nulls the service's schema expects.
@@ -66,7 +73,7 @@ enum RecipeGenerationRequestBody {
             body["revision"] = [
                 "recipe": try JSONSerialization.jsonObject(with: RecipeCoding.encoder.encode(revision.draft.recipe)),
                 "feedback": revision.feedback,
-                "earlierFeedback": revision.draft.feedback,
+                "earlierFeedback": Array(revision.draft.feedback.suffix(maximumEarlierFeedback)),
                 "sources": revision.draft.sources.map { source -> [String: Any] in
                     ["title": source.title ?? NSNull(), "url": source.url.absoluteString]
                 }

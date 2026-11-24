@@ -5,6 +5,14 @@ import SwiftUI
 /// Writes a recipe from what the user describes, then lets them send it back with changes
 /// as many times as they like before saving it to the library.
 struct GenerateRecipeView: View {
+    private enum Discard {
+        case close
+        case startOver
+    }
+
+    /// Shown before anything the cook writes leaves the device for the first time.
+    static let providerNotice = "Recipe Timeline asks OpenAI to write recipes. What you describe and any changes you ask for are sent to OpenAI through the recipe service, and saved with the recipe in your library. Leave out anything you'd rather not share."
+
     @Environment(AuthSession.self) private var auth
     @Environment(AppRouter.self) private var router
     @Environment(\.dismiss) private var dismiss
@@ -19,7 +27,11 @@ struct GenerateRecipeView: View {
     @State private var errorMessage: String?
     /// Reused when the same request is retried so the service can join in-flight work.
     @State private var attemptKey: String?
-    @State private var isConfirmingDiscard = false
+    @State private var pendingDiscard: Discard?
+    @State private var isShowingProviderNotice = false
+    @AppStorage(AppPreferenceKey.generationNoticeAccepted) private var hasAcceptedProviderNotice = false
+    /// The request in flight, cancelled if the sheet goes away so nothing outlives the screen it reports to.
+    @State private var work: Task<Void, Never>?
     @FocusState private var isFeedbackFocused: Bool
 
     var body: some View {
@@ -37,11 +49,27 @@ struct GenerateRecipeView: View {
             .toolbar { toolbar }
             .overlay { if client.isWorking { progress } }
             .onChange(of: attemptFingerprint) { attemptKey = nil }
-            .confirmationDialog("Discard this recipe?", isPresented: $isConfirmingDiscard, titleVisibility: .visible) {
-                Button("Discard recipe", role: .destructive) { dismiss() }
-            } message: {
+            .confirmationDialog("Discard this recipe?", isPresented: isConfirmingDiscard, titleVisibility: .visible, presenting: pendingDiscard) { discard in
+                Button("Discard recipe", role: .destructive) {
+                    switch discard {
+                    case .close: dismiss()
+                    case .startOver: startOver()
+                    }
+                }
+            } message: { _ in
                 Text("It hasn't been saved to your library.")
             }
+            .alert("Send your request to OpenAI?", isPresented: $isShowingProviderNotice) {
+                Button("Not now", role: .cancel) {}
+                Button("Continue") {
+                    hasAcceptedProviderNotice = true
+                    start { await generate() }
+                }
+                .accessibilityIdentifier("accept-generation-notice")
+            } message: {
+                Text(Self.providerNotice)
+            }
+            .onDisappear { work?.cancel() }
         }
         .interactiveDismissDisabled(draft != nil)
         .editorialSurface()
@@ -51,7 +79,7 @@ struct GenerateRecipeView: View {
     private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
             Button("Cancel") {
-                if draft == nil { dismiss() } else { isConfirmingDiscard = true }
+                if draft == nil { dismiss() } else { pendingDiscard = .close }
             }
         }
         ToolbarItem(placement: .confirmationAction) {
@@ -60,7 +88,9 @@ struct GenerateRecipeView: View {
                     .disabled(client.isWorking)
                     .accessibilityIdentifier("save-generated-recipe")
             } else {
-                Button("Create") { Task { await generate() } }
+                Button("Create") {
+                    if hasAcceptedProviderNotice { start { await generate() } } else { isShowingProviderNotice = true }
+                }
                     .disabled(!canGenerate)
                     .accessibilityIdentifier("generate-recipe")
             }
@@ -81,7 +111,10 @@ struct GenerateRecipeView: View {
                     Text("Describe a dish, what's in your fridge, a diet or allergy, or how long you've got. You can ask for changes before you save it.")
                         .font(.footnote)
                         .foregroundStyle(RecipeTheme.secondaryInk)
-                    if trimmedRequest.count > RecipeGenerationRequestBody.maximumTextLength {
+                    Label("Sent to OpenAI to write the recipe, and saved with it in your library.", systemImage: "lock.shield")
+                        .font(.footnote)
+                        .foregroundStyle(RecipeTheme.secondaryInk)
+                    if RecipeGenerationRequestBody.length(of: trimmedRequest) > RecipeGenerationRequestBody.maximumTextLength {
                         Text("Keep it under \(RecipeGenerationRequestBody.maximumTextLength.formatted()) characters.")
                             .font(.footnote)
                             .foregroundStyle(RecipeTheme.warning)
@@ -101,7 +134,7 @@ struct GenerateRecipeView: View {
                 if needsSignIn {
                     SignInWithAppleSection(
                         title: "Sign in to create recipes",
-                        explanation: "Sign in with Apple to create recipes. Your request is sent to the recipe service to write the recipe, and isn't kept."
+                        explanation: "Sign in with Apple to create recipes. The app saves them to your recipe library."
                     )
                 }
 
@@ -144,7 +177,7 @@ struct GenerateRecipeView: View {
                 .background(RecipeTheme.stage.opacity(0.58), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .focused($isFeedbackFocused)
                 .accessibilityIdentifier("revision-feedback")
-            if trimmedFeedback.count > RecipeGenerationRequestBody.maximumTextLength {
+            if RecipeGenerationRequestBody.length(of: trimmedFeedback) > RecipeGenerationRequestBody.maximumTextLength {
                 Text("Keep it under \(RecipeGenerationRequestBody.maximumTextLength.formatted()) characters.")
                     .font(.footnote)
                     .foregroundStyle(RecipeTheme.warning)
@@ -184,7 +217,7 @@ struct GenerateRecipeView: View {
     @ViewBuilder
     private var revisionButtons: some View {
         Button("Revise recipe", systemImage: "arrow.trianglehead.2.clockwise") {
-            Task { await revise() }
+            start { await revise() }
         }
         .primaryGlassButton()
         .disabled(!canRevise)
@@ -195,7 +228,7 @@ struct GenerateRecipeView: View {
                 .disabled(client.isWorking)
                 .accessibilityIdentifier("undo-revision")
         }
-        Button("Start over", systemImage: "square.and.pencil") { startOver() }
+        Button("Start over", systemImage: "square.and.pencil") { pendingDiscard = .startOver }
             .buttonStyle(.glass)
             .disabled(client.isWorking)
     }
@@ -226,12 +259,23 @@ struct GenerateRecipeView: View {
     private var needsSignIn: Bool { client.requiresSignIn && !auth.isAuthenticated }
 
     private var canGenerate: Bool {
-        (RecipeGenerationRequestBody.minimumRequestLength...RecipeGenerationRequestBody.maximumTextLength).contains(trimmedRequest.count)
+        (RecipeGenerationRequestBody.minimumRequestLength...RecipeGenerationRequestBody.maximumTextLength)
+            .contains(RecipeGenerationRequestBody.length(of: trimmedRequest))
             && !needsSignIn && !client.isWorking
     }
 
     private var canRevise: Bool {
-        (1...RecipeGenerationRequestBody.maximumTextLength).contains(trimmedFeedback.count) && !needsSignIn && !client.isWorking
+        (1...RecipeGenerationRequestBody.maximumTextLength).contains(RecipeGenerationRequestBody.length(of: trimmedFeedback))
+            && !needsSignIn && !client.isWorking
+    }
+
+    private var isConfirmingDiscard: Binding<Bool> {
+        Binding(get: { pendingDiscard != nil }, set: { if !$0 { pendingDiscard = nil } })
+    }
+
+    private func start(_ operation: @escaping @MainActor () async -> Void) {
+        work?.cancel()
+        work = Task { await operation() }
     }
 
     /// Changes whenever what would be sent changes, so a retry of the same request keeps its key.
@@ -249,6 +293,10 @@ struct GenerateRecipeView: View {
             attemptKey = nil
             previousDrafts = []
             draft = created
+        } catch is CancellationError {
+            // The sheet went away; there is nothing left to report to.
+        } catch let error as URLError where error.code == .cancelled {
+            // The same, for a request URLSession was still sending.
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -272,6 +320,10 @@ struct GenerateRecipeView: View {
             previousDrafts.append(current)
             draft = revised
             feedback = ""
+        } catch is CancellationError {
+            // The sheet went away; there is nothing left to report to.
+        } catch let error as URLError where error.code == .cancelled {
+            // The same, for a request URLSession was still sending.
         } catch {
             errorMessage = error.localizedDescription
         }

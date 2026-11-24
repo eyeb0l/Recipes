@@ -15,6 +15,10 @@ struct RecipeTimelineApp: App {
 
     init() {
         persistence = PersistenceController.make()
+        if ProcessInfo.processInfo.arguments.contains("--ui-testing") {
+            // Each UI test starts before the user has agreed to send recipe requests to OpenAI.
+            UserDefaults.standard.removeObject(forKey: AppPreferenceKey.generationNoticeAccepted)
+        }
     }
 
     var body: some Scene {

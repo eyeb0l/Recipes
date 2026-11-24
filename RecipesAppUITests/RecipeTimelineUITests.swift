@@ -186,7 +186,17 @@ final class RecipeTimelineUITests: XCTestCase {
         request.typeText("Fudgy brownies")
         XCTAssertTrue(create.isEnabled)
         attachScreenshot(named: "create-recipe-request")
+
+        // Nothing is sent until the user agrees to share their request with OpenAI.
         create.tap()
+        let notice = app.alerts["Send your request to OpenAI?"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 3))
+        notice.buttons["Not now"].firstMatch.tap()
+        XCTAssertFalse(app.navigationBars["Review recipe"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.navigationBars["Create recipe"].exists)
+        create.tap()
+        XCTAssertTrue(notice.waitForExistence(timeout: 3))
+        notice.buttons["Continue"].firstMatch.tap()
 
         XCTAssertTrue(app.navigationBars["Review recipe"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.staticTexts["draft-title"].label, "Generated Brownies")
@@ -235,10 +245,24 @@ final class RecipeTimelineUITests: XCTestCase {
         request.tap()
         request.typeText("Soup")
         app.buttons["generate-recipe"].tap()
+        let notice = app.alerts["Send your request to OpenAI?"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 3))
+        notice.buttons["Continue"].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Review recipe"].waitForExistence(timeout: 10))
+
+        // Starting over discards the draft too, so it asks first.
+        let startOver = app.buttons["Start over"]
+        startOver.tap()
+        let discard = app.buttons["Discard recipe"]
+        XCTAssertTrue(discard.waitForExistence(timeout: 3))
+        discard.tap()
+        XCTAssertTrue(app.navigationBars["Create recipe"].waitForExistence(timeout: 3))
+        // Having agreed once, the next request goes straight through.
+        app.buttons["generate-recipe"].tap()
+        XCTAssertFalse(notice.waitForExistence(timeout: 1))
         XCTAssertTrue(app.navigationBars["Review recipe"].waitForExistence(timeout: 10))
 
         app.navigationBars["Review recipe"].buttons["Cancel"].tap()
-        let discard = app.buttons["Discard recipe"]
         XCTAssertTrue(discard.waitForExistence(timeout: 3))
         discard.tap()
         XCTAssertFalse(app.navigationBars["Review recipe"].waitForExistence(timeout: 2))
