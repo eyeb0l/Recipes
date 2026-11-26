@@ -19,8 +19,10 @@ The only provider is OpenAI. The default model is `gpt-6.1-terra`, OpenAI's fast
 1. Create production and preview KV namespaces for `SESSIONS` and replace the placeholder IDs in `wrangler.jsonc`.
 2. Configure the Sign in with Apple service/app identifier as `APPLE_CLIENT_ID`.
 3. Add `SESSION_SIGNING_KEY` and `OPENAI_API_KEY` with `wrangler secret put`. Keep provider keys out of `vars` and out of the app. Deployments that previously used Grok can remove the unused `XAI_API_KEY` secret with `wrangler secret delete XAI_API_KEY`.
-4. Confirm the per-minute rate binding and the 20-import UTC daily quota suit the private TestFlight group.
+4. Confirm the per-minute rate binding and UTC daily quotas suit the private TestFlight group. The `daily-quota-v1` migration creates the SQLite-backed `DAILY_QUOTA` Durable Object binding.
 5. Run `pnpm typecheck`, `pnpm test`, and `pnpm exec wrangler deploy --dry-run` before `pnpm run deploy`.
+
+Deploy the first quota migration to all traffic at once. Each account's first quota operation for the UTC day seeds the new counters from the legacy KV counters that are visible at that point. The old Worker version writes only to KV, so splitting traffic across the cutover or rolling back partway through a UTC day can undercount usage.
 
 ## Request flow
 
@@ -48,7 +50,7 @@ pnpm run test:live:sites -- https://example.com/recipe [https://example.org/anot
 
 The harness uses the Worker's real User-Agent, DNS and redirect checks, timeouts, response-size limit, and layered extractor. It emits one JSON record per URL and never runs publisher JavaScript. Treat origin `402`/`403` responses and client challenges as access limitations; do not spoof a browser to bypass them. Keep distilled regression fixtures in the unit suite because live pages can change independently of the Worker.
 
-Concurrent retries with the same user/idempotency key share only an in-flight promise. It is deleted immediately after completion, preserving the no-result-retention boundary.
+Imports and generation share 20 provider calls per account per UTC day. URL imports also have a separate allowance of 40 page-fetch attempts, including unusable pages. The Durable Object admits both types of work atomically and clears the day's counters the following night. Retries with the same account and idempotency key can share an in-flight promise within a Worker isolate. The promise is deleted immediately after completion.
 
 ## Recipe generation
 

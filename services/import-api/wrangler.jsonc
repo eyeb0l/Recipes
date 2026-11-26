@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "recipe-timeline-import-api",
-  "main": "src/index.ts",
+  "main": "src/worker.ts",
   "compatibility_date": "2026-08-01",
   "preview_urls": false,
   "observability": {
@@ -18,6 +18,12 @@
       "id": "efdc4d1244ad4c329a8bbe374af5a726",
       "preview_id": "6d59a62df5fb46d895977ffa0da54e43"
     }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "DAILY_QUOTA", "class_name": "DailyQuota" }]
+  },
+  "migrations": [
+    { "tag": "daily-quota-v1", "new_sqlite_classes": ["DailyQuota"] }
   ],
   "ratelimits": [
     {

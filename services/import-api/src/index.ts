@@ -7,6 +7,7 @@ import { prepareGenerationRequest } from "./generation-request";
 import { prepareImportRequest } from "./import-request";
 import { createExtractor, createGenerator, type RecipeExtractor, type RecipeGenerator } from "./providers";
 import { cleanSources, generationProvenanceText } from "./providers/recipe-generator";
+import { consumeDailyAllowance } from "./quota";
 import { resolveRecipeServingCount } from "./serving-resolution";
 import { adaptRecipeUnitsForClient, reconcileSystemDependentUnits } from "./unit-resolution";
 
@@ -78,10 +79,8 @@ export function createApp(dependencies: AppDependencies = {}) {
       dependencies.resolver,
       async (metadata) => {
         // A retry joining in-flight work was already admitted, but every outbound fetch still counts.
-        if (!inFlightImports.has(`${quotaKey}:${metadata.idempotencyKey}`)) {
-          await assertDailyQuotaAvailable(context.env, quotaKey);
-        }
-        await consumeDailyFetchAllowance(context.env, quotaKey);
+        const joining = inFlightImports.has(`${quotaKey}:${metadata.idempotencyKey}`);
+        await consumeDailyAllowance(context.env, quotaKey, joining ? "retry-fetch" : "fetch");
       }
     );
     const dedupeKey = `${quotaKey}:${prepared.metadata.idempotencyKey}`;
@@ -89,7 +88,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     if (!work) {
       const env = context.env;
       const requestID = context.get("requestID");
-      work = consumeDailyQuota(env, quotaKey)
+      work = consumeDailyAllowance(env, quotaKey, "provider")
         .then(() => performImport(env, prepared, requestID, dependencies.extractorFactory));
       inFlightImports.set(dedupeKey, work);
       void work.finally(() => inFlightImports.delete(dedupeKey)).catch(() => undefined);
@@ -115,7 +114,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     if (!work) {
       const env = context.env;
       const requestID = context.get("requestID");
-      work = consumeDailyQuota(env, quotaKey)
+      work = consumeDailyAllowance(env, quotaKey, "provider")
         .then(() => performGeneration(env, prepared.brief, requestID, dependencies.generatorFactory));
       inFlightGenerations.set(dedupeKey, work);
       void work.finally(() => inFlightGenerations.delete(dedupeKey)).catch(() => undefined);
@@ -197,45 +196,6 @@ async function limitedJSON(request: Request, maximum: number): Promise<unknown> 
 async function subjectDigest(subject: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(subject));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-const dailyImportLimit = 20;
-/** Public page fetches allowed per user per day, including fetches whose page turns out unusable. */
-const dailyFetchLimit = 40;
-
-function dailyQuotaKey(subjectHash: string): { day: string; key: string } {
-  const day = new Date().toISOString().slice(0, 10);
-  return { day, key: `quota:${day}:${subjectHash}` };
-}
-
-function quotaExceeded(): APIError {
-  return new APIError(429, "quota_exceeded", "The daily private import allowance has been reached.");
-}
-
-async function assertDailyQuotaAvailable(env: Env, subjectHash: string): Promise<void> {
-  const { key } = dailyQuotaKey(subjectHash);
-  if (Number(await env.SESSIONS.get(key) ?? 0) >= dailyImportLimit) throw quotaExceeded();
-}
-
-async function consumeDailyFetchAllowance(env: Env, subjectHash: string): Promise<void> {
-  const { day } = dailyQuotaKey(subjectHash);
-  const key = `fetch-quota:${day}:${subjectHash}`;
-  const current = Number(await env.SESSIONS.get(key) ?? 0);
-  if (current >= dailyFetchLimit) {
-    throw new APIError(429, "fetch_quota_exceeded", "Too many recipe links were tried today. Paste the recipe text or scan the page instead.");
-  }
-  await env.SESSIONS.put(key, String(current + 1), { expirationTtl: quotaTTLSeconds(day) });
-}
-
-function quotaTTLSeconds(day: string): number {
-  return Math.max(60, Math.floor((Date.parse(`${day}T00:00:00.000Z`) + 2 * 86_400_000 - Date.now()) / 1_000));
-}
-
-async function consumeDailyQuota(env: Env, subjectHash: string): Promise<void> {
-  const { day, key } = dailyQuotaKey(subjectHash);
-  const current = Number(await env.SESSIONS.get(key) ?? 0);
-  if (current >= dailyImportLimit) throw quotaExceeded();
-  await env.SESSIONS.put(key, String(current + 1), { expirationTtl: quotaTTLSeconds(day) });
 }
 
 export default createApp();

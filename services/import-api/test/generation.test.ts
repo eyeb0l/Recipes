@@ -4,7 +4,7 @@ import { createGenerator, type RecipeGenerator } from "../src/providers";
 import { OpenAIGenerator, openAIGenerationMaxOutputTokens } from "../src/providers/openai-generator";
 import { cleanSources, generationInstructions, generationPrompt } from "../src/providers/recipe-generator";
 import type { GenerationBrief, GenerationResult } from "../src/types";
-import { MemoryKV, testEnv, validRecipe } from "./fixtures";
+import { memoryQuota, testEnv, validRecipe } from "./fixtures";
 
 async function accessToken(app: ReturnType<typeof createApp>, env: Env): Promise<string> {
   const response = await app.request("/v1/session/apple", {
@@ -39,10 +39,6 @@ function result(recipe: unknown = validRecipe(), sources: GenerationResult["sour
   return { recipe, provider: "openai", model: "gpt-6.1-terra", webSearch: true, sources };
 }
 
-function quotaValue(env: Env): string | undefined {
-  return [...(env.SESSIONS as unknown as MemoryKV).values.entries()].find(([key]) => key.startsWith("quota:"))?.[1];
-}
-
 describe("recipe generation API", () => {
   it("writes a recipe with a fresh ID and records the request and sources it came from", async () => {
     const env = testEnv();
@@ -61,7 +57,7 @@ describe("recipe generation API", () => {
       "Created from your request:\nQuick pancakes for two\n\nSources consulted:\n- Pancake guide: https://example.com/pancakes"
     );
     expect(spy.mock.calls[0]![0]).toEqual({ request: "Quick pancakes for two", locale: "en_GB", preferredUnitSystem: "metric", revision: undefined });
-    expect(quotaValue(env)).toBe("1");
+    expect(memoryQuota(env).usage?.provider).toBe(1);
   });
 
   it("revises a draft, keeping its ID and the sources earlier drafts used", async () => {
@@ -124,7 +120,7 @@ describe("recipe generation API", () => {
     expect(response.status).toBe(400);
     expect((await response.json() as any).error.code).toBe(code);
     expect(spy).not.toHaveBeenCalled();
-    expect(quotaValue(env)).toBeUndefined();
+    expect(memoryQuota(env).usage).toBeUndefined();
   });
 
   it("coalesces simultaneous retries into one provider call and one use of the allowance", async () => {
@@ -142,14 +138,12 @@ describe("recipe generation API", () => {
     expect(first.status).toBe(200);
     expect(retry.status).toBe(200);
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(quotaValue(env)).toBe("1");
+    expect(memoryQuota(env).usage?.provider).toBe(1);
   });
 
   it("shares the daily allowance with imports", async () => {
     const env = testEnv();
-    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("opaque-apple-subject"));
-    const subject = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-    (env.SESSIONS as unknown as MemoryKV).values.set(`quota:${new Date().toISOString().slice(0, 10)}:${subject}`, "20");
+    await memoryQuota(env).seed({ provider: 20, fetch: 0 });
     const { generator, spy } = stubGenerator(async () => result());
     const app = createApp({ verifyApple: async () => "opaque-apple-subject", generatorFactory: () => generator });
     const response = await app.request("/v1/recipe-generations", generationRequest(await accessToken(app, env)), env);

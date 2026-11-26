@@ -4,7 +4,7 @@ import type { RecipeExtractor } from "../src/providers";
 import { missingServingCountMessage, missingServingCountUncertaintyID } from "../src/serving-resolution";
 import { legacyUnitIDs } from "../src/unit-resolution";
 import type { NormalizedRecipeSource } from "../src/types";
-import { MemoryKV, testEnv, validRecipe } from "./fixtures";
+import { memoryQuota, testEnv, validRecipe } from "./fixtures";
 
 const pastedRecipe = "Mix 100 g flour with enough water to make a smooth batter. Cook in a hot pan until set on both sides.";
 
@@ -214,8 +214,7 @@ describe("import API", () => {
 
   it("does not spend the daily allowance on invalid sources or coalesced retries", async () => {
     const env = testEnv();
-    const kv = env.SESSIONS as unknown as MemoryKV;
-    const quotaValue = () => [...kv.values.entries()].find(([key]) => key.startsWith("quota:"))?.[1];
+    const quota = memoryQuota(env);
     const extract = vi.fn(async () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
       return { recipe: validRecipe(), provider: "openai" as const, model: "gpt-6.1-terra" };
@@ -229,7 +228,7 @@ describe("import API", () => {
       body: JSON.stringify({ sourceType: "text", text: "too short", locale: "en_GB", preferredUnitSystem: "metric", idempotencyKey: "invalid" })
     }, env);
     expect(tooShort.status).toBe(400);
-    expect(quotaValue()).toBeUndefined();
+    expect(quota.usage?.provider).toBeUndefined();
 
     const [first, retry] = await Promise.all([
       app.request("/v1/recipe-imports", importRequest(token, "quota-key"), env),
@@ -238,17 +237,13 @@ describe("import API", () => {
     expect(first.status).toBe(200);
     expect(retry.status).toBe(200);
     expect(extract).toHaveBeenCalledTimes(1);
-    expect(quotaValue()).toBe("1");
+    expect(quota.usage?.provider).toBe(1);
   });
 
   it("lets a retry join in-flight work that used the last daily import", async () => {
     const limit = vi.fn(async () => ({ success: true }));
     const env = testEnv({ IMPORT_RATE_LIMITER: { limit } });
-    const kv = env.SESSIONS as unknown as MemoryKV;
-    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("opaque-apple-subject"));
-    const subject = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-    const quotaKey = `quota:${new Date().toISOString().slice(0, 10)}:${subject}`;
-    kv.values.set(quotaKey, "19");
+    const quota = memoryQuota(env);
     let release: () => void = () => undefined;
     const extract = vi.fn();
     const fetcher = vi.fn(async () => new Response(`<script type="application/ld+json">${JSON.stringify({
@@ -258,7 +253,7 @@ describe("import API", () => {
     const token = await accessToken(app, env);
 
     for (const request of [importRequest, urlImportRequest]) {
-      kv.values.set(quotaKey, "19");
+      await quota.seed({ provider: 19, fetch: 0 });
       const pending = new Promise<void>((resolve) => { release = resolve; });
       extract.mockReset();
       limit.mockClear();
@@ -270,7 +265,7 @@ describe("import API", () => {
       const key = `last-import-${request.name}`;
       const first = app.request("/v1/recipe-imports", request(token, key), env);
       await vi.waitFor(() => expect(extract).toHaveBeenCalledTimes(1));
-      expect(kv.values.get(quotaKey)).toBe("20");
+      expect(quota.usage?.provider).toBe(20);
       const retry = app.request("/v1/recipe-imports", request(token, key), env);
       // Hold the first import open until the retry is past admission (and, for links, its page fetch),
       // then leave a margin for it to join; a fixed short delay flaked on loaded machines.
@@ -282,13 +277,13 @@ describe("import API", () => {
       expect(firstResponse.status).toBe(200);
       expect(retryResponse.status).toBe(200);
       expect(extract).toHaveBeenCalledTimes(1);
-      expect(kv.values.get(quotaKey)).toBe("20");
+      expect(quota.usage?.provider).toBe(20);
     }
   });
 
   it("charges the fetch allowance for a retry that joins in-flight URL work", async () => {
     const env = testEnv();
-    const kv = env.SESSIONS as unknown as MemoryKV;
+    const quota = memoryQuota(env);
     let release: () => void = () => undefined;
     const pending = new Promise<void>((resolve) => { release = resolve; });
     const extract = vi.fn(async () => {
@@ -303,8 +298,7 @@ describe("import API", () => {
 
     const first = app.request("/v1/recipe-imports", urlImportRequest(token, "shared-key"), env);
     await vi.waitFor(() => expect(extract).toHaveBeenCalledTimes(1));
-    const fetchKey = [...kv.values.keys()].find((key) => key.startsWith("fetch-quota:"))!;
-    kv.values.set(fetchKey, "40");
+    await quota.seed({ provider: quota.usage!.provider, fetch: 40 });
     const reused = await app.request("/v1/recipe-imports", urlImportRequest(token, "shared-key"), env);
     expect(reused.status).toBe(429);
     expect((await reused.json() as any).error.code).toBe("fetch_quota_exceeded");
@@ -319,10 +313,8 @@ describe("import API", () => {
     const fetcher = vi.fn(async () => new Response("<html></html>", { headers: { "Content-Type": "text/html" } }));
     const app = createApp({ verifyApple: async () => "opaque-apple-subject", fetcher, resolver: publicResolver, extractorFactory: () => ({ provider: "openai", model: "gpt-6.1-terra", extract }) });
     const token = await accessToken(app, env);
-    const kv = env.SESSIONS as unknown as MemoryKV;
-    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("opaque-apple-subject"));
-    const subject = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-    kv.values.set(`quota:${new Date().toISOString().slice(0, 10)}:${subject}`, "20");
+    const quota = memoryQuota(env);
+    await quota.seed({ provider: 20, fetch: 0 });
     const response = await app.request("/v1/recipe-imports", importRequest(token, "over-quota"), env);
     expect(response.status).toBe(429);
     expect((await response.json() as any).error.code).toBe("quota_exceeded");
@@ -334,7 +326,7 @@ describe("import API", () => {
 
   it("limits outbound page fetches per day even when the fetched page can't be used", async () => {
     const env = testEnv();
-    const kv = env.SESSIONS as unknown as MemoryKV;
+    const quota = memoryQuota(env);
     const extract = vi.fn();
     const fetcher = vi.fn(async () => new Response("not found", { status: 404, headers: { "Content-Type": "text/html" } }));
     const app = createApp({ verifyApple: async () => "opaque-apple-subject", fetcher, resolver: publicResolver, extractorFactory: () => ({ provider: "openai", model: "gpt-6.1-terra", extract }) });
@@ -343,11 +335,10 @@ describe("import API", () => {
     const failed = await app.request("/v1/recipe-imports", urlImportRequest(token, "missing-page"), env);
     expect(failed.status).toBeGreaterThanOrEqual(400);
     expect(fetcher).toHaveBeenCalledTimes(1);
-    expect([...kv.values.entries()].find(([key]) => key.startsWith("fetch-quota:"))?.[1]).toBe("1");
-    expect([...kv.values.keys()].some((key) => key.startsWith("quota:"))).toBe(false);
+    expect(quota.usage?.fetch).toBe(1);
+    expect(quota.usage?.provider).toBe(0);
 
-    const fetchKey = [...kv.values.keys()].find((key) => key.startsWith("fetch-quota:"))!;
-    kv.values.set(fetchKey, "40");
+    await quota.seed({ provider: quota.usage!.provider, fetch: 40 });
     const limited = await app.request("/v1/recipe-imports", urlImportRequest(token, "another-page"), env);
     expect(limited.status).toBe(429);
     expect((await limited.json() as any).error.code).toBe("fetch_quota_exceeded");
