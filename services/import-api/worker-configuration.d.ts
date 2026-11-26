@@ -4,6 +4,7 @@ interface RateLimitBinding {
 
 interface Env {
   SESSIONS: KVNamespace;
+  DAILY_QUOTA: DurableObjectNamespace<import("./src/daily-quota").DailyQuota>;
   IMPORT_RATE_LIMITER: RateLimitBinding;
   APPLE_CLIENT_ID: string;
   SESSION_SIGNING_KEY: string;
